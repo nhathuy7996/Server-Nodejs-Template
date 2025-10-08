@@ -1,0 +1,31 @@
+{
+  "users": [
+    {
+      "walletAddress": "hh",
+      "BAA": 0,
+      "level": 5,
+      "upgrade": [
+        {
+          "id": "upgrades:FireRate",
+          "level": 3,
+          "type": "FireRate"
+        },
+        {
+          "id": "upgrades:PlayerHealth",
+          "level": 2,
+          "type": "PlayerHealth"
+        },
+        {
+          "id": "upgrades:Damage",
+          "level": 1,
+          "type": "Damage"
+        }
+      ],
+      "skins": [
+        "db96b49a-3ee8-47fc-ae79-cf1ab7106b15"
+      ],
+      "currentSkin": "db96b49a-3ee8-47fc-ae79-cf1ab7106b15",
+      "ClaimRequest": []
+    }
+  ]
+}

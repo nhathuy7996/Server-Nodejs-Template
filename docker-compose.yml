@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  baa-server:
+    build:
+      context: .
+      dockerfile: Dockerfile  # Sử dụng Dockerfile chính (đã được tối ưu)
+    container_name: baa-server
+    ports:
+      - "3103:3103"
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - HTTP_PORT=3103
+    volumes:
+      # Mount .env file nếu cần
+      - ./.env:/app/.env:ro
+      # Mount data directory nếu cần persistent storage
+      - ./data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3103/', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - baa-network
+    depends_on:
+      - redis
+
+  # Redis service với cấu hình tốt hơn
+  redis:
+    image: redis:7-alpine
+    container_name: baa-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-your_redis_password}
+    volumes:
+      - redis_data:/data
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-your_redis_password}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - baa-network
+
+networks:
+  baa-network:
+    driver: bridge
+
+volumes:
+  redis_data:
+    driver: local
