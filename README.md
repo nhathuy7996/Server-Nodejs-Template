@@ -1,6 +1,6 @@
-# Unity WebGL Game Server
+# Game Server
 
-A comprehensive game server template for Unity WebGL games with Telegram Mini Apps integration, built with Express.js, Socket.IO, and TypeScript. This server provides real-time multiplayer functionality, JWT authentication, and Discord integration.
+A comprehensive game server template , built with Express.js, Socket.IO, and TypeScript. This server provides real-time multiplayer functionality, JWT authentication, and Discord integration.
 
 ## 📋 Table of Contents
 
