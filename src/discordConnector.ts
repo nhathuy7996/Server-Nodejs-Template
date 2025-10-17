@@ -42,12 +42,34 @@ client.on(Events.MessageCreate, async (message) => {
     }
   });
 
-client.login(token);
+// Xử lý lỗi Discord client
+client.on(Events.Error, (error) => {
+    console.error('Discord client error:', error);
+});
+
+// Đăng nhập với xử lý lỗi
+client.login(token).catch((error) => {
+    console.error('❌ Discord login failed:', error.message);
+    console.log('⚠️  Discord bot không khả dụng');
+});
 
 function Connect() {
-    return new Promise(resolve => {
+    return new Promise((resolve, reject) => {
+        // Nếu đã ready thì resolve ngay
+        if (client.isReady()) {
+            resolve(client);
+            return;
+        }
+
+        // Timeout sau 5 giây nếu không kết nối được
+        const timeout = setTimeout(() => {
+            clearInterval(check);
+            reject(new Error('Discord connection timeout'));
+        }, 5000);
+
         const check = setInterval(() => {
             if (client.isReady()) {
+                clearTimeout(timeout);
                 clearInterval(check);
                 resolve(client);
             }
@@ -57,14 +79,19 @@ function Connect() {
 
 // Hàm gửi thông báo
 export async function sendDiscordNotification(message: string) {
-    await Connect();
+    try {
+        await Connect();
 
-    console.log(`Gửi tin đến server!`);
-    const channel = client.channels.cache.get(channelId!) as TextChannel;
-    if (channel) {
-        await channel.send(message);
-    } else {
-        console.error("Không thể gửi tin nhắn, kênh không tồn tại!");
+        console.log(`Gửi tin đến server!`);
+        const channel = client.channels.cache.get(channelId!) as TextChannel;
+        if (channel) {
+            await channel.send(message);
+        } else {
+            console.error("Không thể gửi tin nhắn, kênh không tồn tại!");
+        }
+    } catch (error) {
+        console.error("❌ Không thể gửi Discord notification:", error instanceof Error ? error.message : error);
+        // Server vẫn tiếp tục chạy, chỉ log lỗi
     }
 }
 
