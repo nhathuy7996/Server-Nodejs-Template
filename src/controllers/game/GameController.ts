@@ -87,6 +87,21 @@ export class GameController implements IGameController {
 
     }
 
+      public updateSocket(socket: AuthenticatedSocket){
+        console.log(`[GameController] Updating socket from ${this.socket.id} to ${socket.id}`);
+       
+        // Remove listeners từ socket cũ
+        this.removeEventListeners();
+        
+        // Cập nhật socket mới
+        this.socket = socket;  
+        
+        // Setup lại listeners trên socket mới
+        this.setupEventListeners();
+        
+        console.log(`[GameController] Socket updated successfully`);
+    }
+
 
     /**
      * Cleanup khi player disconnect hoặc game kết thúc

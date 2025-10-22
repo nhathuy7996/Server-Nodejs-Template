@@ -10,14 +10,13 @@ export const handleGamePlayEvents = (socket: AuthenticatedSocket, io: Server) =>
     
     // Xử lý event startGame
     socket.on('startGame', (data) => {
-        const socketId = socket.id;
         
         // Kiểm tra xem đã có game session nào cho socket này chưa
-        const existingGame = gameSessions.get(socketId);
+        const existingGame = gameSessions.get(socket.userId!);
         if (existingGame) {
             // Nếu đã có game session, cleanup trước khi tạo mới
             existingGame.cleanup();
-            gameSessions.delete(socketId);
+            gameSessions.delete(socket.userId!);
         }
 
         
@@ -27,18 +26,39 @@ export const handleGamePlayEvents = (socket: AuthenticatedSocket, io: Server) =>
         const gameController = new GameController(socket, io);
         
         // Lưu vào map
-        gameSessions.set(socketId, gameController);
+        gameSessions.set(socket.userId!, gameController);
+    });
+
+    socket.on('reconnectGame', (data) => {
+        console.log(`Client ${socket.id} emmit reconnect game!`);
+        
+        // Kiểm tra xem đã có game session nào cho socket này chưa
+        const existingGame = gameSessions.get(socket.userId!);
+        if (existingGame) {
+            existingGame.updateSocket(socket);
+            socket.emit('server:reconnectGame', {
+                success: true,
+                message: 'Reconnect game success!'
+            });
+            return;
+        }
+
+        socket.emit('server:reconnectGame', {
+            success: false,
+            message: 'Reconnect game fail!'
+        });
+        
     });
     
     // Xử lý khi client disconnect
     socket.on('disconnect', () => {
-        const socketId = socket.id;
-        const gameController = gameSessions.get(socketId);
+       
+        const gameController = gameSessions.get(socket.userId!);
         
         if (gameController) {
             // Cleanup game controller
             gameController.cleanup();
-            gameSessions.delete(socketId);
+            gameSessions.delete(socket.userId!);
         }
     });
     
@@ -47,10 +67,10 @@ export const handleGamePlayEvents = (socket: AuthenticatedSocket, io: Server) =>
         console.error(`Socket error for user ${socket.userId}:`, error);
         
         // Cleanup game controller nếu có
-        const gameController = gameSessions.get(socket.id);
+        const gameController = gameSessions.get(socket.userId!);
         if (gameController) {
             gameController.cleanup();
-            gameSessions.delete(socket.id);
+            gameSessions.delete(socket.userId!);
         }
     });
 };
