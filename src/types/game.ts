@@ -1,14 +1,15 @@
 // Game-related types
-import { Vector3 } from ".";
+import { AuthenticatedSocket, Vector3 } from ".";
 
 export interface Player {
-    id: string;
-    userId: string;
+    id: number;
+    socket: AuthenticatedSocket;
     position: Vector3;
     rotation: Vector3;
+    velocity: Vector3;
     health: number;
     speed: number;
-    lastUpdate: number;
+    lastUpdate?: number;
 }
 
 /**
@@ -17,7 +18,17 @@ export interface Player {
  */
 export interface IGameController {
 
-    setupEventListeners(): void ;
+    isActive: boolean;
+
+    setupEventListeners(socket: AuthenticatedSocket): void ;
+
+    removeEventListeners(socket: AuthenticatedSocket): void;
+
+    playerJoin(socket: AuthenticatedSocket): IGameController;
+
+    playerLeave(socket: AuthenticatedSocket): IGameController;
+
+    updateSocket(socket: AuthenticatedSocket): IGameController;
 
     /**
      * Hàm update được gọi định kỳ bởi update loop

@@ -1,10 +1,11 @@
 import { AuthenticatedSocket } from '../types';
 import { Server } from 'socket.io';
 import { GameController } from '../controllers/game/GameController';
+import { IGameController } from '../types/game';
 
 
 // Map để quản lý các game controller
-const gameSessions = new Map<string, GameController>();
+const gameSessions = new Map<string, IGameController>();
 
 export const handleGamePlayEvents = (socket: AuthenticatedSocket, io: Server) => {
     
@@ -23,7 +24,7 @@ export const handleGamePlayEvents = (socket: AuthenticatedSocket, io: Server) =>
         const dataParse = JSON.parse(data);
       
         // Tạo game controller mới
-        const gameController = new GameController(socket, io);
+        const gameController = new GameController( io).playerJoin(socket);
         
         // Lưu vào map
         gameSessions.set(socket.userId!, gameController);
@@ -54,10 +55,8 @@ export const handleGamePlayEvents = (socket: AuthenticatedSocket, io: Server) =>
     socket.on('disconnect', () => {
        
         const gameController = gameSessions.get(socket.userId!);
-        
-        if (gameController) {
-            // Cleanup game controller
-            gameController.cleanup();
+        gameController?.playerLeave(socket);
+        if (gameController && !gameController.isActive) {
             gameSessions.delete(socket.userId!);
         }
     });
@@ -68,16 +67,11 @@ export const handleGamePlayEvents = (socket: AuthenticatedSocket, io: Server) =>
         
         // Cleanup game controller nếu có
         const gameController = gameSessions.get(socket.userId!);
-        if (gameController) {
-            gameController.cleanup();
+        gameController?.playerLeave(socket);
+        if (gameController && !gameController.isActive) {
             gameSessions.delete(socket.userId!);
         }
     });
-};
-
-// Utility function để lấy thông tin game controller
-export const getGameController = (socketId: string): GameController | undefined => {
-    return gameSessions.get(socketId);
 };
 
 // Utility function để cleanup tất cả game controllers (dùng khi server shutdown)

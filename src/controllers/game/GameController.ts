@@ -1,6 +1,7 @@
 import { AuthenticatedSocket } from '../../types';
 import { Server } from 'socket.io';
-import {  Player, IGameController } from '../../types/game';
+import {  Player, IGameController } from '../../types/game'; 
+import { env } from 'process';
 
 export class GameController implements IGameController {
 
@@ -8,56 +9,84 @@ export class GameController implements IGameController {
     // Tốc độ cập nhật vị trí (lần/giây)
     private static readonly UPDATE_RATE = 60; // 60 FPS
     private static readonly UPDATE_INTERVAL = 1000 / GameController.UPDATE_RATE; // ~16.67ms
- 
 
-    private socketId: string;
-    private startTime: number;
-    private isActive: boolean;
-    private socket: AuthenticatedSocket;
-    private io: Server;
-    private userId: string;
-
+    isActive: boolean;
+    protected startTime: number;
+    protected io: Server; 
+    
     private updateInterval: NodeJS.Timeout | null = null;
 
     // Thông tin player
-    private players: Player[] = []; 
+    protected players: Player[] = [];
 
     // Thời điểm cập nhật cuối cùng
     private lastUpdateTime: number;
 
-    constructor(socket: AuthenticatedSocket, io: Server) {
-        this.socket = socket;
+    constructor( io: Server) {
+        
         this.io = io;
-        this.socketId = socket.id;
-        this.userId = socket.userId || 'unknown';
+        
+         
         this.startTime = Date.now();
         this.lastUpdateTime = Date.now();
         this.isActive = true;
 
-        // Khởi tạo player với vị trí ban đầu
-        this.players.push({
-            id: this.socketId,
-            userId: this.userId,
-            position: { x: 0, y: 0, z: 0 }, // Vị trí spawn mặc định
-            rotation: { x: 0, y: 0, z: 0 },
-            health: 100,
-            speed: 0,
-            lastUpdate: Date.now()
-        });
-
-        // Đăng ký các event handlers
-        this.setupEventListeners();
-
         // Bắt đầu update loop
         this.startUpdateLoop();
 
-        console.log(`[GameController] Initialized for user ${this.userId}, socket ${this.socketId}`);
     }
+    playerJoin(socket: AuthenticatedSocket): IGameController {
+        const player: Player = {
+            id: this.players.length + 1,
+            socket: socket,
+            position: { x: 0, y: 0, z: 0 },
+            rotation: { x: 0, y: 0, z: 0 },
+            velocity: { x: 0, y: 0, z: 0 },
+            health: 100,
+            speed: 1,
+        }
+        this.setupEventListeners(player.socket);
+        this.players.push(player);
+        return this;
+    }
+    playerLeave(socket: AuthenticatedSocket): IGameController {
+        const player = this.players.find(p => p.socket.userId === socket.userId);
+        if(!player)
+            return this;
+
+        this.removeEventListeners(player.socket);
+
+        this.players = this.players.filter(p => p.socket.userId !== socket.userId);
+        if(this.players.length == 0){
+            this.cleanup();
+        }
+       
+        return this;
+    }
+
+    public updateSocket(socket: AuthenticatedSocket): IGameController {
+
+        const player = this.players.find(p => p.socket.userId === socket.userId);
+        if(!player)
+            return this;
+
+        this.removeEventListeners(player.socket);
+        
+        // Cập nhật socket mới
+        player.socket = socket;
+        
+        // Setup lại listeners trên socket mới
+        this.setupEventListeners(player.socket);
+        
+        console.log(`[GameController] Socket updated successfully`);
+        return this;
+    }
+
 
     /**
      * Đăng ký các event listeners từ client
      */
-    public setupEventListeners(): void {
+    public setupEventListeners(socket: AuthenticatedSocket): void {
 
     }
 
@@ -87,28 +116,12 @@ export class GameController implements IGameController {
 
     }
 
-      public updateSocket(socket: AuthenticatedSocket){
-        console.log(`[GameController] Updating socket from ${this.socket.id} to ${socket.id}`);
-       
-        // Remove listeners từ socket cũ
-        this.removeEventListeners();
-        
-        // Cập nhật socket mới
-        this.socket = socket;  
-        
-        // Setup lại listeners trên socket mới
-        this.setupEventListeners();
-        
-        console.log(`[GameController] Socket updated successfully`);
-    }
-
 
     /**
      * Cleanup khi player disconnect hoặc game kết thúc
      */
     cleanup(): void {
-        console.log(`[GameController] Cleaning up for user ${this.userId}, socket ${this.socketId}`);
-
+       
         // Đánh dấu không active
         this.isActive = false;
 
@@ -119,13 +132,14 @@ export class GameController implements IGameController {
         }
 
         // Remove tất cả listeners
-        this.removeEventListeners();
-
+        for(const player of this.players){
+            this.removeEventListeners(player.socket);
+        }
     }
 
 
-    public removeEventListeners(): void {
-
+    public removeEventListeners(socket: AuthenticatedSocket): void {
+        
     }
 
 }
