@@ -1,6 +1,13 @@
 // Game-related types
 import { AuthenticatedSocket, Vector3 } from ".";
 
+export enum GameType {
+    NORMAL = "normal",
+    WORLD_BOSS = "world_boss",
+    PVP = "pvp",
+    SURVIVAL = "survival"
+}
+
 export interface Player {
     id: number;
     socket: AuthenticatedSocket;
@@ -24,11 +31,11 @@ export interface IGameController {
 
     removeEventListeners(socket: AuthenticatedSocket): void;
 
-    playerJoin(socket: AuthenticatedSocket): IGameController;
+    playerJoin(socket: AuthenticatedSocket): Promise<IGameController>;
 
-    playerLeave(socket: AuthenticatedSocket): IGameController;
+    playerLeave(socket: AuthenticatedSocket): Promise<IGameController>;
 
-    updateSocket(socket: AuthenticatedSocket): IGameController;
+    updateSocket(socket: AuthenticatedSocket): Promise<IGameController>;
 
     /**
      * Hàm update được gọi định kỳ bởi update loop
@@ -41,6 +48,7 @@ export interface IGameController {
     /**
      * Cleanup khi player disconnect hoặc game kết thúc
      */
+    
     cleanup(): void;
 }
 

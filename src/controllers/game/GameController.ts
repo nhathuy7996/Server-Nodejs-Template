@@ -2,6 +2,7 @@ import { AuthenticatedSocket } from '../../types';
 import { Server } from 'socket.io';
 import {  Player, IGameController } from '../../types/game'; 
 import { env } from 'process';
+import { resolve } from 'path';
 
 export class GameController implements IGameController {
 
@@ -9,9 +10,11 @@ export class GameController implements IGameController {
     // Tốc độ cập nhật vị trí (lần/giây)
     private static readonly UPDATE_RATE = 60; // 60 FPS
     private static readonly UPDATE_INTERVAL = 1000 / GameController.UPDATE_RATE; // ~16.67ms
+ 
 
-    isActive: boolean;
+     
     protected startTime: number;
+    isActive: boolean = false; 
     protected io: Server; 
     
     private updateInterval: NodeJS.Timeout | null = null;
@@ -29,14 +32,9 @@ export class GameController implements IGameController {
          
         this.startTime = Date.now();
         this.lastUpdateTime = Date.now();
-        this.isActive = true;
-
-        // Bắt đầu update loop
-        this.startUpdateLoop();
-
     }
-    playerJoin(socket: AuthenticatedSocket): IGameController {
-        const player: Player = {
+    async playerJoin(socket: AuthenticatedSocket): Promise<IGameController> {
+        const player = {
             id: this.players.length + 1,
             socket: socket,
             position: { x: 0, y: 0, z: 0 },
@@ -47,12 +45,21 @@ export class GameController implements IGameController {
         }
         this.setupEventListeners(player.socket);
         this.players.push(player);
-        return this;
+
+        if(!this.updateInterval){
+          this.startUpdateLoop();
+        }
+
+        if(!this.isActive)
+            this.isActive = true;
+
+        return Promise.resolve(this);
     }
-    playerLeave(socket: AuthenticatedSocket): IGameController {
+
+    playerLeave(socket: AuthenticatedSocket): Promise<IGameController> {
         const player = this.players.find(p => p.socket.userId === socket.userId);
         if(!player)
-            return this;
+            return Promise.resolve(this);
 
         this.removeEventListeners(player.socket);
 
@@ -61,14 +68,14 @@ export class GameController implements IGameController {
             this.cleanup();
         }
        
-        return this;
+        return Promise.resolve(this);
     }
 
-    public updateSocket(socket: AuthenticatedSocket): IGameController {
+    public updateSocket(socket: AuthenticatedSocket): Promise<IGameController> {
 
         const player = this.players.find(p => p.socket.userId === socket.userId);
         if(!player)
-            return this;
+            return Promise.resolve(this);
 
         this.removeEventListeners(player.socket);
         
@@ -79,7 +86,7 @@ export class GameController implements IGameController {
         this.setupEventListeners(player.socket);
         
         console.log(`[GameController] Socket updated successfully`);
-        return this;
+        return Promise.resolve(this);
     }
 
 

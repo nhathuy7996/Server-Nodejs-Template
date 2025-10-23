@@ -12,6 +12,7 @@ import privateRouter from "./routes/privateRouter";
 import publicRouter from './routes/publicRouter';
 import { createRedisAdapter, closeRedisConnections } from './config/redis'; 
 import fetch from 'node-fetch'; 
+import { gamePlayServices } from "./services/gamePlayServices";
 
 dotenv.config();
 
@@ -91,6 +92,8 @@ const initSocketIO = async () => {
     console.log('🔧 Setting up Socket.IO connection handler');
     io.on('connection', (socket) => {
         console.log('✅ Client connected successfully:', socket.id, 'User:', socket.data);
+
+        gamePlayServices(socket, io);
 
         socket.on('disconnect', (reason) => {
             console.log('Client disconnected:', socket.id, reason);
