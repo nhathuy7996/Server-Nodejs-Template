@@ -19,6 +19,14 @@ export interface Player {
     lastUpdate?: number;
 }
 
+export interface GameRecord {
+    walletId: string;
+    gameType: GameType;
+    timeStart: number;
+    timeEnd: number;
+    gameData?: any;
+}
+
 /**
  * Interface cho GameController
  * Dùng để định nghĩa các phương thức chính mà mọi game controller cần implement
