@@ -60,19 +60,28 @@ botTele.on("message", (msg) => {
  
 });
 
-export async function sendMessage(userId: string, message: string) {
+export async function sendMessage( message: string,userId: string = "", thread_id: string = "") {
+  try{
   const url = `https://api.telegram.org/bot${token}/sendMessage`;
   const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
           chat_id: userId,
+          message_thread_id: thread_id,
           text: message,
       }),
   });
 
   const data = await response.json();
-  console.log(data);
+}catch(e){
+  console.error(`Send message to tele fail!`);
+}
+ 
+}
+
+export async function sendMessageNoti( message: string) {
+   sendMessage(message, process.env.TELEGRAM_CHATID || "", process.env.TELEGRAM_THREAD_ID || "");
 }
 
 console.log("🤖 Bot is running...");
