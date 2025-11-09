@@ -46,7 +46,6 @@ export class NormalMapGame extends GameController {
                 rotation: parsedData.rotation,
                 velocity: parsedData.velocity
             });
-
             // Optional: Validate movement (anti-cheat)
             //this.validatePlayerMovement(player, parsedData);
             

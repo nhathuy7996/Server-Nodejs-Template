@@ -169,7 +169,7 @@ export class GameController implements IGameController {
      */
     protected broadcastPlayerUpdates(): void {
         const currentTime = Date.now();
-        const updates: { [playerId: number]: any } = {};
+        const updates: any[] = [];
         let totalPlayersProcessed = 0;
 
         // Collect all dirty changes từ tất cả players
@@ -189,14 +189,14 @@ export class GameController implements IGameController {
             // Chỉ broadcast nếu có thay đổi
             if (player.dirtyTracker.hasDirtyFields()) {
                 const changedData = player.dirtyTracker.getChangedData();
-                updates[player.id] = {
+                updates.push({
                     id: player.id,
                     ...changedData,
                     timestamp: currentTime
-                };
+                });
 
                 // Estimate data size for monitoring
-                const dataSize = JSON.stringify(updates[player.id]).length;
+                const dataSize = JSON.stringify(updates[updates.length - 1]).length;
                 this.performanceMonitor.recordUpdate(true, dataSize);
 
                 // Clear dirty fields và update broadcast time
@@ -209,9 +209,11 @@ export class GameController implements IGameController {
         }
 
         // Broadcast nếu có updates
-        if (Object.keys(updates).length > 0) {
-            console.log(`[GameController] Broadcasting updates for ${Object.keys(updates).length} players (processed ${JSON.stringify(updates)}) players).`);
-            this.io.emit('game:playerUpdates', { updates });
+        if (updates.length > 0) {
+            
+            for(let p of this.players){
+                p.socket.emit('game:playerUpdates', updates);
+            }
         }
 
         // Log performance stats periodically

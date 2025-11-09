@@ -54,11 +54,9 @@ export const gamePlayServices = (socket: AuthenticatedSocket, io: Server) => {
     // Xử lý khi client disconnect
     socket.on('disconnect', () => {
        
-        const gameController = gameSessions.get(socket.userId!);
+        const gameController = gameSessions.get("1");
         gameController?.playerLeave(socket);
-        if (gameController && !gameController.isActive) {
-            gameSessions.delete(socket.userId!);
-        }
+         
     });
     
     // Xử lý lỗi socket
@@ -66,11 +64,9 @@ export const gamePlayServices = (socket: AuthenticatedSocket, io: Server) => {
         console.error(`Socket error for user ${socket.userId}:`, error);
         
         // Cleanup game controller nếu có
-        const gameController = gameSessions.get(socket.userId!);
+        const gameController = gameSessions.get("1");
         gameController?.playerLeave(socket);
-        if (gameController && !gameController.isActive) {
-            gameSessions.delete(socket.userId!);
-        }
+        
     });
 };
 
