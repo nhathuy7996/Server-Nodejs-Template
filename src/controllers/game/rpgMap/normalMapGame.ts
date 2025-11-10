@@ -5,6 +5,11 @@ import { IGameController, TrackablePlayerState } from "../../../types/game";
 
 export class NormalMapGame extends GameController {
 
+    // Tốc độ broadcast tối đa (để tránh spam)
+    private static readonly MAX_BROADCAST_RATE = 60; // 20 FPS
+    private static readonly MIN_BROADCAST_INTERVAL = 1000 / NormalMapGame.MAX_BROADCAST_RATE; // 50ms
+    
+
     constructor(io: Server) {
         super(io);
     }
@@ -93,6 +98,13 @@ export class NormalMapGame extends GameController {
         // Collect all dirty changes từ tất cả players
         for (const player of this.players) {
             if (!player.dirtyTracker) continue; 
+
+            // Kiểm tra rate limiting
+            const timeSinceLastBroadcast = currentTime - (player.lastBroadcastTime || 0);
+            if (timeSinceLastBroadcast < NormalMapGame.MIN_BROADCAST_INTERVAL) {
+                // Record update without dirty fields (saved bandwidth) 
+                continue;
+            }
 
             // Chỉ broadcast nếu có thay đổi
             if (player.dirtyTracker.hasDirtyFields()) {
