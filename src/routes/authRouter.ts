@@ -20,10 +20,10 @@ router.get('/nonce', async (req, res) => {
 router.post('/', async (req: Request, res: Response) => {
     try {
  
-        const { data } = req.body;
+        const { userId } = req.body;
  
         // Generate JWT token
-        const token = utils.tokenEncode( {data: data});
+        const token = utils.tokenEncode( {userId: userId});
 
         // Return success with token and user data
         res.json({

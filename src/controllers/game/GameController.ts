@@ -1,17 +1,16 @@
 import { AuthenticatedSocket } from '../../types';
 import { Server } from 'socket.io';
-import {  Player, IGameController } from '../../types/game'; 
-import { env } from 'process';
-import { resolve } from 'path';
+import {  Player, IGameController, TrackablePlayerState } from '../../types/game'; 
+import { DirtyTracker } from '../../utils/DirtyTracker'; 
 
 export class GameController implements IGameController {
-
 
     // Tốc độ cập nhật vị trí (lần/giây)
     private static readonly UPDATE_RATE = 60; // 60 FPS
     private static readonly UPDATE_INTERVAL = 1000 / GameController.UPDATE_RATE; // ~16.67ms
- 
-
+    
+        // Thời điểm cập nhật cuối cùng
+    private lastUpdateTime: number;
      
     protected startTime: number;
     isActive: boolean = false; 
@@ -21,9 +20,8 @@ export class GameController implements IGameController {
 
     // Thông tin player
     protected players: Player[] = [];
+    protected lastID: number = 0;
 
-    // Thời điểm cập nhật cuối cùng
-    private lastUpdateTime: number;
 
     constructor( io: Server) {
         
@@ -31,18 +29,27 @@ export class GameController implements IGameController {
         
          
         this.startTime = Date.now();
-        this.lastUpdateTime = Date.now();
+        this.lastUpdateTime = Date.now(); 
     }
     async playerJoin(socket: AuthenticatedSocket): Promise<IGameController> {
-        const player = {
-            id: this.players.length + 1,
-            socket: socket,
-            position: { x: 0, y: 0, z: 0 },
-            rotation: { x: 0, y: 0, z: 0 },
+        const initialState: TrackablePlayerState = {
+            position: { x: 0, y: 0, z: 0 }, 
             velocity: { x: 0, y: 0, z: 0 },
             health: 100,
             speed: 1,
-        }
+        };
+
+        const player: Player = {
+            id: this.lastID++,
+            socket: socket,
+            position: initialState.position,
+            velocity: initialState.velocity,
+            health: initialState.health,
+            speed: initialState.speed,
+            dirtyTracker: new DirtyTracker<TrackablePlayerState>(initialState),
+            lastBroadcastTime: Date.now(),
+        };
+        
         this.setupEventListeners(player.socket);
         this.players.push(player);
 
@@ -120,9 +127,8 @@ export class GameController implements IGameController {
      * @param deltaTime - Thời gian kể từ lần update trước (tính bằng giây)
      */
     public update(deltaTime: number): void {
-
+       
     }
-
 
     /**
      * Cleanup khi player disconnect hoặc game kết thúc

@@ -1,5 +1,6 @@
 // Game-related types
 import { AuthenticatedSocket, Vector3 } from ".";
+import { DirtyTracker } from "../utils/DirtyTracker";
 
 export enum GameType {
     NORMAL = "normal",
@@ -8,15 +9,24 @@ export enum GameType {
     SURVIVAL = "survival"
 }
 
+// Interface cho trạng thái player có thể track được
+export interface TrackablePlayerState {
+    position: Vector3; 
+    velocity: Vector3;
+    health: number;
+    speed: number;
+}
+
 export interface Player {
     id: number;
     socket: AuthenticatedSocket;
     position: Vector3;
-    rotation: Vector3;
     velocity: Vector3;
     health: number;
     speed: number;
     lastUpdate?: number;
+    dirtyTracker?: DirtyTracker<TrackablePlayerState>;
+    lastBroadcastTime?: number;
 }
 
 export interface GameRecord {
