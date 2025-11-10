@@ -1,28 +1,17 @@
 import { Vector3 } from "../types";
 
-export interface PlayerState {
-    position: Vector3;
-    rotation: Vector3;
-    velocity: Vector3;
-    health: number;
-    speed: number;
-}
+// Generic type cho DirtyFields - tự động tạo từ interface T
+export type DirtyFields<T> = {
+    [K in keyof T]?: boolean;
+};
 
-export interface DirtyFields {
-    position?: boolean;
-    rotation?: boolean;
-    velocity?: boolean;
-    health?: boolean;
-    speed?: boolean;
-}
-
-export class DirtyTracker {
-    private previousState: PlayerState;
-    private currentState: PlayerState;
-    private dirtyFields: DirtyFields = {};
+export class DirtyTracker<T extends Record<string, any>> {
+    private previousState: T;
+    private currentState: T;
+    private dirtyFields: DirtyFields<T> = {};
     private threshold: number;
 
-    constructor(initialState: PlayerState, threshold: number = 0.001) {
+    constructor(initialState: T, threshold: number = 0.001) {
         this.previousState = this.deepClone(initialState);
         this.currentState = this.deepClone(initialState);
         this.threshold = threshold;
@@ -31,33 +20,23 @@ export class DirtyTracker {
     /**
      * Cập nhật state mới và kiểm tra các field đã thay đổi
      */
-    updateState(newState: Partial<PlayerState>): DirtyFields {
+    updateState(newState: Partial<T>): DirtyFields<T> {
         this.dirtyFields = {};
 
-        // Kiểm tra từng field
-        if (newState.position && !this.areVector3Equal(this.currentState.position, newState.position)) {
-            this.dirtyFields.position = true;
-            this.currentState.position = { ...newState.position };
-        }
+        // Duyệt qua tất cả các keys của newState
+        for (const key in newState) {
+            if (newState.hasOwnProperty(key)) {
+                const newValue = newState[key];
+                const currentValue = this.currentState[key];
 
-        if (newState.rotation && !this.areVector3Equal(this.currentState.rotation, newState.rotation)) {
-            this.dirtyFields.rotation = true;
-            this.currentState.rotation = { ...newState.rotation };
-        }
-
-        if (newState.velocity && !this.areVector3Equal(this.currentState.velocity, newState.velocity)) {
-            this.dirtyFields.velocity = true;
-            this.currentState.velocity = { ...newState.velocity };
-        }
-
-        if (newState.health !== undefined && Math.abs(this.currentState.health - newState.health) > this.threshold) {
-            this.dirtyFields.health = true;
-            this.currentState.health = newState.health;
-        }
-
-        if (newState.speed !== undefined && Math.abs(this.currentState.speed - newState.speed) > this.threshold) {
-            this.dirtyFields.speed = true;
-            this.currentState.speed = newState.speed;
+                // Kiểm tra nếu giá trị đã thay đổi
+                if (!this.areValuesEqual(currentValue, newValue)) {
+                    this.dirtyFields[key] = true;
+                    this.currentState[key] = this.isVector3(newValue) 
+                        ? { ...newValue } as any
+                        : newValue;
+                }
+            }
         }
 
         return this.dirtyFields;
@@ -66,27 +45,16 @@ export class DirtyTracker {
     /**
      * Lấy chỉ những field đã thay đổi để gửi về client
      */
-    getChangedData(): Partial<PlayerState> {
-        const changedData: Partial<PlayerState> = {};
+    getChangedData(): Partial<T> {
+        const changedData: Partial<T> = {};
 
-        if (this.dirtyFields.position) {
-            changedData.position = { ...this.currentState.position };
-        }
-
-        if (this.dirtyFields.rotation) {
-            changedData.rotation = { ...this.currentState.rotation };
-        }
-
-        if (this.dirtyFields.velocity) {
-            changedData.velocity = { ...this.currentState.velocity };
-        }
-
-        if (this.dirtyFields.health) {
-            changedData.health = this.currentState.health;
-        }
-
-        if (this.dirtyFields.speed) {
-            changedData.speed = this.currentState.speed;
+        for (const key in this.dirtyFields) {
+            if (this.dirtyFields[key]) {
+                const value = this.currentState[key];
+                changedData[key] = this.isVector3(value) 
+                    ? { ...value } as any
+                    : value;
+            }
         }
 
         return changedData;
@@ -110,8 +78,40 @@ export class DirtyTracker {
     /**
      * Lấy toàn bộ state hiện tại
      */
-    getCurrentState(): PlayerState {
+    getCurrentState(): T {
         return this.deepClone(this.currentState);
+    }
+
+    /**
+     * So sánh hai giá trị có bằng nhau không
+     * Hỗ trợ: number, string, Vector3, boolean, v.v.
+     */
+    private areValuesEqual(a: any, b: any): boolean {
+        if (a === undefined || b === undefined) return a === b;
+
+        // Kiểm tra nếu là Vector3
+        if (this.isVector3(a) && this.isVector3(b)) {
+            return this.areVector3Equal(a, b);
+        }
+
+        // Kiểm tra nếu là number
+        if (typeof a === 'number' && typeof b === 'number') {
+            return Math.abs(a - b) <= this.threshold;
+        }
+
+        // So sánh trực tiếp cho các kiểu khác
+        return a === b;
+    }
+
+    /**
+     * Kiểm tra có phải Vector3 không
+     */
+    private isVector3(value: any): value is Vector3 {
+        return value && 
+               typeof value === 'object' && 
+               'x' in value && 
+               'y' in value && 
+               'z' in value;
     }
 
     /**

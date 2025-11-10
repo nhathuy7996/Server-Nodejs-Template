@@ -1,22 +1,16 @@
 import { AuthenticatedSocket } from '../../types';
 import { Server } from 'socket.io';
-import {  Player, IGameController } from '../../types/game'; 
-import { env } from 'process';
-import { resolve } from 'path';
-import { DirtyTracker, PlayerState } from '../../utils/DirtyTracker';
-import { PerformanceMonitor } from '../../utils/PerformanceMonitor';
+import {  Player, IGameController, TrackablePlayerState } from '../../types/game'; 
+import { DirtyTracker } from '../../utils/DirtyTracker'; 
 
 export class GameController implements IGameController {
-
 
     // Tốc độ cập nhật vị trí (lần/giây)
     private static readonly UPDATE_RATE = 60; // 60 FPS
     private static readonly UPDATE_INTERVAL = 1000 / GameController.UPDATE_RATE; // ~16.67ms
     
-    // Tốc độ broadcast tối đa (để tránh spam)
-    private static readonly MAX_BROADCAST_RATE = 20; // 20 FPS
-    private static readonly MIN_BROADCAST_INTERVAL = 1000 / GameController.MAX_BROADCAST_RATE; // 50ms
-
+        // Thời điểm cập nhật cuối cùng
+    private lastUpdateTime: number;
      
     protected startTime: number;
     isActive: boolean = false; 
@@ -26,14 +20,8 @@ export class GameController implements IGameController {
 
     // Thông tin player
     protected players: Player[] = [];
+    protected lastID: number = 0;
 
-    // Thời điểm cập nhật cuối cùng
-    private lastUpdateTime: number;
-
-    // Performance monitoring
-    protected performanceMonitor: PerformanceMonitor;
-    private lastStatsLogTime: number = 0;
-    private static readonly STATS_LOG_INTERVAL = 60000; // Log every minute
 
     constructor( io: Server) {
         
@@ -41,27 +29,24 @@ export class GameController implements IGameController {
         
          
         this.startTime = Date.now();
-        this.lastUpdateTime = Date.now();
-        this.performanceMonitor = PerformanceMonitor.getInstance();
+        this.lastUpdateTime = Date.now(); 
     }
     async playerJoin(socket: AuthenticatedSocket): Promise<IGameController> {
-        const initialState: PlayerState = {
-            position: { x: 0, y: 0, z: 0 },
-            rotation: { x: 0, y: 0, z: 0 },
+        const initialState: TrackablePlayerState = {
+            position: { x: 0, y: 0, z: 0 }, 
             velocity: { x: 0, y: 0, z: 0 },
             health: 100,
             speed: 1,
         };
 
         const player: Player = {
-            id: this.players.length + 1,
+            id: this.lastID++,
             socket: socket,
             position: initialState.position,
-            rotation: initialState.rotation,
             velocity: initialState.velocity,
             health: initialState.health,
             speed: initialState.speed,
-            dirtyTracker: new DirtyTracker(initialState),
+            dirtyTracker: new DirtyTracker<TrackablePlayerState>(initialState),
             lastBroadcastTime: Date.now(),
         };
         
@@ -142,109 +127,8 @@ export class GameController implements IGameController {
      * @param deltaTime - Thời gian kể từ lần update trước (tính bằng giây)
      */
     public update(deltaTime: number): void {
-        // Broadcast changes to all clients
-        this.broadcastPlayerUpdates();
+       
     }
-
-    /**
-     * Cập nhật state của player và đánh dấu dirty fields
-     */
-    protected updatePlayerState(playerId: number, newState: Partial<PlayerState>): void {
-        const player = this.players.find(p => p.id === playerId);
-        if (!player || !player.dirtyTracker) return;
-
-        // Cập nhật dirty tracker
-        player.dirtyTracker.updateState(newState);
-
-        // Cập nhật actual player properties
-        if (newState.position) player.position = { ...newState.position };
-        if (newState.rotation) player.rotation = { ...newState.rotation };
-        if (newState.velocity) player.velocity = { ...newState.velocity };
-        if (newState.health !== undefined) player.health = newState.health;
-        if (newState.speed !== undefined) player.speed = newState.speed;
-    }
-
-    /**
-     * Broadcast chỉ những thay đổi cần thiết đến tất cả client
-     */
-    protected broadcastPlayerUpdates(): void {
-        const currentTime = Date.now();
-        const updates: any[] = [];
-        let totalPlayersProcessed = 0;
-
-        // Collect all dirty changes từ tất cả players
-        for (const player of this.players) {
-            if (!player.dirtyTracker) continue;
-
-            totalPlayersProcessed++;
-
-            // Kiểm tra rate limiting
-            const timeSinceLastBroadcast = currentTime - (player.lastBroadcastTime || 0);
-            if (timeSinceLastBroadcast < GameController.MIN_BROADCAST_INTERVAL) {
-                // Record update without dirty fields (saved bandwidth)
-                this.performanceMonitor.recordUpdate(false, 0);
-                continue;
-            }
-
-            // Chỉ broadcast nếu có thay đổi
-            if (player.dirtyTracker.hasDirtyFields()) {
-                const changedData = player.dirtyTracker.getChangedData();
-                updates.push({
-                    id: player.id,
-                    ...changedData,
-                    timestamp: currentTime
-                });
-
-                // Estimate data size for monitoring
-                const dataSize = JSON.stringify(updates[updates.length - 1]).length;
-                this.performanceMonitor.recordUpdate(true, dataSize);
-
-                // Clear dirty fields và update broadcast time
-                player.dirtyTracker.clearDirtyFields();
-                player.lastBroadcastTime = currentTime;
-            } else {
-                // No changes, record saved bandwidth
-                this.performanceMonitor.recordUpdate(false, 0);
-            }
-        }
-
-        // Broadcast nếu có updates
-        if (updates.length > 0) {
-            
-            for(let p of this.players){
-                p.socket.emit('game:playerUpdates', updates);
-            }
-        }
-
-        // Log performance stats periodically
-        if (currentTime - this.lastStatsLogTime > GameController.STATS_LOG_INTERVAL) {
-            this.performanceMonitor.logSummary();
-            this.lastStatsLogTime = currentTime;
-        }
-    }
-
-    /**
-     * Broadcast toàn bộ state của tất cả players (dùng khi player mới join)
-     */
-    protected broadcastAllPlayersState(targetSocket?: AuthenticatedSocket): void {
-        const playersData = this.players.map(player => ({
-            id: player.id,
-            position: player.position,
-            rotation: player.rotation,
-            velocity: player.velocity,
-            health: player.health,
-            speed: player.speed,
-            timestamp: Date.now()
-        }));
-
-        const event = 'game:allPlayersState';
-        if (targetSocket) {
-            targetSocket.emit(event, { players: playersData });
-        } else {
-            this.io.emit(event, { players: playersData });
-        }
-    }
-
 
     /**
      * Cleanup khi player disconnect hoặc game kết thúc

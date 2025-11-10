@@ -9,16 +9,23 @@ export enum GameType {
     SURVIVAL = "survival"
 }
 
+// Interface cho trạng thái player có thể track được
+export interface TrackablePlayerState {
+    position: Vector3; 
+    velocity: Vector3;
+    health: number;
+    speed: number;
+}
+
 export interface Player {
     id: number;
     socket: AuthenticatedSocket;
     position: Vector3;
-    rotation: Vector3;
     velocity: Vector3;
     health: number;
     speed: number;
     lastUpdate?: number;
-    dirtyTracker?: DirtyTracker;
+    dirtyTracker?: DirtyTracker<TrackablePlayerState>;
     lastBroadcastTime?: number;
 }
 

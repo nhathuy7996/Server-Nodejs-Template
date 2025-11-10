@@ -1,9 +1,15 @@
 import { Server } from "socket.io";
 import { GameController } from "../GameController";
 import { AuthenticatedSocket } from "../../../types";
-import { IGameController } from "../../../types/game";
+import { IGameController, TrackablePlayerState } from "../../../types/game";
 
 export class NormalMapGame extends GameController {
+
+    // Tốc độ broadcast tối đa (để tránh spam)
+    private static readonly MAX_BROADCAST_RATE = 20; // 20 FPS
+    private static readonly MIN_BROADCAST_INTERVAL = 1000 / NormalMapGame.MAX_BROADCAST_RATE; // 50ms
+    
+
     constructor(io: Server) {
         super(io);
     }
@@ -42,8 +48,7 @@ export class NormalMapGame extends GameController {
             
             // Sử dụng updatePlayerState để tự động trigger dirty tracking
             this.updatePlayerState(player.id, {
-                position: parsedData.position,
-                rotation: parsedData.rotation,
+                position: parsedData.position, 
                 velocity: parsedData.velocity
             });
             // Optional: Validate movement (anti-cheat)
@@ -51,6 +56,91 @@ export class NormalMapGame extends GameController {
             
         } catch (error) {
             console.error('[NormalMapGame] Error parsing player move data:', error);
+        }
+    }
+
+    override update(deltaTime: number): void {
+       this.broadcastPlayerUpdates();
+    }
+
+      /**
+     * Cập nhật state của player và đánh dấu dirty fields
+     */
+    protected updatePlayerState(playerId: number, newState: Partial<TrackablePlayerState>): void {
+        const player = this.players.find(p => p.id === playerId);
+        if (!player || !player.dirtyTracker) return;
+
+        // Cập nhật dirty tracker
+        player.dirtyTracker.updateState(newState);
+
+        // Cập nhật actual player properties
+        if (newState.position) player.position = { ...newState.position }; 
+        if (newState.velocity) player.velocity = { ...newState.velocity };
+        if (newState.health !== undefined) player.health = newState.health;
+        if (newState.speed !== undefined) player.speed = newState.speed;
+    }
+
+    /**
+     * Broadcast chỉ những thay đổi cần thiết đến tất cả client
+     */
+    protected broadcastPlayerUpdates(): void {
+        const currentTime = Date.now();
+        const updates: any[] = []; 
+
+        // Collect all dirty changes từ tất cả players
+        for (const player of this.players) {
+            if (!player.dirtyTracker) continue; 
+
+            // Kiểm tra rate limiting
+            const timeSinceLastBroadcast = currentTime - (player.lastBroadcastTime || 0);
+            if (timeSinceLastBroadcast < NormalMapGame.MIN_BROADCAST_INTERVAL) {
+                // Record update without dirty fields (saved bandwidth) 
+                continue;
+            }
+
+            // Chỉ broadcast nếu có thay đổi
+            if (player.dirtyTracker.hasDirtyFields()) {
+                const changedData = player.dirtyTracker.getChangedData();
+                updates.push({
+                    id: player.id,
+                    ...changedData,
+                    timestamp: currentTime
+                });
+
+                // Clear dirty fields và update broadcast time
+                player.dirtyTracker.clearDirtyFields();
+                player.lastBroadcastTime = currentTime;
+            }  
+        }
+
+        // Broadcast nếu có updates
+        if (updates.length > 0) {
+            
+            for(let p of this.players){
+                p.socket.emit('game:playerUpdates', updates);
+            }
+        }
+
+    }
+
+    /**
+     * Broadcast toàn bộ state của tất cả players (dùng khi player mới join)
+     */
+    protected broadcastAllPlayersState(targetSocket?: AuthenticatedSocket): void {
+        const playersData = this.players.map(player => ({
+            id: player.id,
+            position: player.position, 
+            velocity: player.velocity,
+            health: player.health,
+            speed: player.speed,
+            timestamp: Date.now()
+        }));
+
+        const event = 'game:allPlayersState';
+        if (targetSocket) {
+            targetSocket.emit(event, { players: playersData });
+        } else {
+            console.error(`[NormalMapGame] broadcastAllPlayersState called without targetSocket`);
         }
     }
 
