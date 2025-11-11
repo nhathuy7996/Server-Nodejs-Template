@@ -21,6 +21,7 @@ export class DirtyTracker<T extends Record<string, any>> {
      * Cập nhật state mới và kiểm tra các field đã thay đổi
      */
     updateState(newState: Partial<T>): DirtyFields<T> {
+      
         this.dirtyFields = {};
 
         // Duyệt qua tất cả các keys của newState

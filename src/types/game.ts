@@ -51,7 +51,7 @@ export interface IGameController {
 
     playerJoin(socket: AuthenticatedSocket): Promise<IGameController>;
 
-    playerLeave(socket: AuthenticatedSocket): Promise<IGameController>;
+    playerLeave(socket: AuthenticatedSocket): Player | null;
 
     updateSocket(socket: AuthenticatedSocket): Promise<IGameController>;
 

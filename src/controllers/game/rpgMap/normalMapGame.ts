@@ -1,7 +1,7 @@
 import { Server } from "socket.io";
 import { GameController } from "../GameController";
 import { AuthenticatedSocket } from "../../../types";
-import { IGameController, TrackablePlayerState } from "../../../types/game";
+import { IGameController, Player, TrackablePlayerState } from "../../../types/game";
 
 export class NormalMapGame extends GameController {
 
@@ -23,19 +23,34 @@ export class NormalMapGame extends GameController {
     override async playerJoin(socket: AuthenticatedSocket): Promise<IGameController> {
         const result = await super.playerJoin(socket);
         
-        const player = this.players.find(p => p.socket.userId === socket.userId);
+        const player = Array.from(this.players.values()).find(p => p.socket.userId === socket.userId);
         if (!player) {
             console.error(`[NormalMapGame] playerJoin: Player not found after join (userId: ${socket.userId})`);
             return result;
         }
 
-       
         // Gửi toàn bộ state của tất cả players cho player mới join
         setTimeout(() => {
+            console.log(`[NormalMapGame] Sending all players state to player ${player.id}`);
             player.socket.emit('game:joined', { playerId: player.id });
             this.broadcastAllPlayersState(socket);
+
+            this.players.forEach(p => {
+                p.socket.emit('game:playerJoined', { playerId: player.id });
+            });
         }, 100); // Delay nhỏ để đảm bảo socket đã sẵn sàng
         
+        return result;
+    }
+
+    override playerLeave(socket: AuthenticatedSocket): Player | null  {
+        const result = super.playerLeave(socket);
+       
+        if(result!== null)
+            this.players.forEach(p => {
+                p.socket.emit('game:playerLeft', { playerId: result!.id });
+            });
+ 
         return result;
     }
 
@@ -48,17 +63,17 @@ export class NormalMapGame extends GameController {
 
     onPlayerMove(socket: AuthenticatedSocket, data: string): void {
         
-        const player = this.players.find(p => p.socket.userId === socket.userId);
+        const player = Array.from(this.players.values()).find(p => p.socket.userId === socket.userId);
         if (!player) return;
 
         try {
             const parsedData = JSON.parse(data);
-            
+            let newUpdates: Partial<TrackablePlayerState> = {};
+            for (const key in parsedData) {
+                 newUpdates[key as keyof TrackablePlayerState] = parsedData[key];
+            }
             // Sử dụng updatePlayerState để tự động trigger dirty tracking
-            this.updatePlayerState(player.id, {
-                position: parsedData.position, 
-                velocity: parsedData.velocity
-            });
+            this.updatePlayerState(player.id, newUpdates);
             // Optional: Validate movement (anti-cheat)
             //this.validatePlayerMovement(player, parsedData);
             
@@ -75,7 +90,7 @@ export class NormalMapGame extends GameController {
      * Cập nhật state của player và đánh dấu dirty fields
      */
     protected updatePlayerState(playerId: number, newState: Partial<TrackablePlayerState>): void {
-        const player = this.players.find(p => p.id === playerId);
+        const player = this.players.get(playerId);
         if (!player || !player.dirtyTracker) return;
 
         // Cập nhật dirty tracker
@@ -97,35 +112,35 @@ export class NormalMapGame extends GameController {
 
         // Collect all dirty changes từ tất cả players
         for (const player of this.players) {
-            if (!player.dirtyTracker) continue; 
+            if (!player[1].dirtyTracker) continue; 
 
             // Kiểm tra rate limiting
-            const timeSinceLastBroadcast = currentTime - (player.lastBroadcastTime || 0);
+            const timeSinceLastBroadcast = currentTime - (player[1].lastBroadcastTime || 0);
             if (timeSinceLastBroadcast < NormalMapGame.MIN_BROADCAST_INTERVAL) {
                 // Record update without dirty fields (saved bandwidth) 
                 continue;
             }
 
             // Chỉ broadcast nếu có thay đổi
-            if (player.dirtyTracker.hasDirtyFields()) {
-                const changedData = player.dirtyTracker.getChangedData();
+            if (player[1].dirtyTracker.hasDirtyFields()) {
+                const changedData = player[1].dirtyTracker.getChangedData();
                 updates.push({
-                    id: player.id,
+                    id: player[0],
                     ...changedData,
                     timestamp: currentTime
                 });
 
                 // Clear dirty fields và update broadcast time
-                player.dirtyTracker.clearDirtyFields();
-                player.lastBroadcastTime = currentTime;
+                player[1].dirtyTracker.clearDirtyFields();
+                player[1].lastBroadcastTime = currentTime;
             }  
         }
 
         // Broadcast nếu có updates
         if (updates.length > 0) {
-            
+             
             for(let p of this.players){
-                p.socket.emit('game:playerUpdates', updates);
+                p[1].socket.emit('game:playerUpdates', updates);
             }
         }
 
@@ -135,7 +150,7 @@ export class NormalMapGame extends GameController {
      * Broadcast toàn bộ state của tất cả players (dùng khi player mới join)
      */
     protected broadcastAllPlayersState(targetSocket?: AuthenticatedSocket): void {
-        const playersData = this.players.map(player => ({
+        const playersData = Array.from(this.players.values()).map(player => ({
             id: player.id,
             position: player.position, 
             velocity: player.velocity,

@@ -19,7 +19,7 @@ export class GameController implements IGameController {
     private updateInterval: NodeJS.Timeout | null = null;
 
     // Thông tin player
-    protected players: Player[] = [];
+    protected players: Map<number, Player> = new Map();
     protected lastID: number = 0;
 
 
@@ -51,7 +51,7 @@ export class GameController implements IGameController {
         };
         
         this.setupEventListeners(player.socket);
-        this.players.push(player);
+        this.players.set(player.id, player);
 
         if(!this.updateInterval){
           this.startUpdateLoop();
@@ -63,24 +63,24 @@ export class GameController implements IGameController {
         return Promise.resolve(this);
     }
 
-    playerLeave(socket: AuthenticatedSocket): Promise<IGameController> {
-        const player = this.players.find(p => p.socket.userId === socket.userId);
+    playerLeave(socket: AuthenticatedSocket): Player | null {
+        const player = Array.from(this.players.values()).find(p => p.socket.userId === socket.userId);
         if(!player)
-            return Promise.resolve(this);
+            return null;
 
         this.removeEventListeners(player.socket);
 
-        this.players = this.players.filter(p => p.socket.userId !== socket.userId);
-        if(this.players.length == 0){
+        this.players.delete(player.id);
+        if(this.players.size == 0){
             this.cleanup();
         }
        
-        return Promise.resolve(this);
+        return player;
     }
 
     public updateSocket(socket: AuthenticatedSocket): Promise<IGameController> {
 
-        const player = this.players.find(p => p.socket.userId === socket.userId);
+        const player = Array.from(this.players.values()).find(p => p.socket.userId === socket.userId);
         if(!player)
             return Promise.resolve(this);
 
@@ -145,8 +145,8 @@ export class GameController implements IGameController {
         }
 
         // Remove tất cả listeners
-        for(const player of this.players){
-            this.removeEventListeners(player.socket);
+        for(const item of this.players){
+            this.removeEventListeners(item[1].socket);
         }
     }
 
