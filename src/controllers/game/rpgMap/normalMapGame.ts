@@ -42,6 +42,7 @@ export class NormalMapGame extends GameController {
 
         socket.emit('server:playerJoined', {
             playerId: newPlayer.id,
+            position: newPlayer.position, // Gửi position ban đầu cho player mới
             players: existingPlayers
         });
 
@@ -83,9 +84,9 @@ export class NormalMapGame extends GameController {
     public setupEventListeners(socket: AuthenticatedSocket): void {
         super.setupEventListeners(socket);
 
-        // Lắng nghe sự kiện cập nhật vị trí từ client
-        socket.on('client:updatePosition', (data) => {
-            this.handlePlayerUpdatePosition(socket, data);
+        // Lắng nghe sự kiện cập nhật velocity từ client
+        socket.on('client:updateVelocity', (data) => {
+            this.handlePlayerUpdateVelocity(socket, data);
         });
     }
 
@@ -94,55 +95,46 @@ export class NormalMapGame extends GameController {
      */
     public removeEventListeners(socket: AuthenticatedSocket): void {
         super.removeEventListeners(socket); 
-        socket.removeAllListeners('client:updatePosition');
+        socket.removeAllListeners('client:updateVelocity');
     }
 
     /**
-     * Xử lý cập nhật vị trí player từ client
+     * Xử lý cập nhật velocity player từ client
+     * Server sẽ tính toán position dựa trên velocity
      */
-    private handlePlayerUpdatePosition(socket: AuthenticatedSocket, data: any): void {
+    private handlePlayerUpdateVelocity(socket: AuthenticatedSocket, data: any): void {
        
         const player = Array.from(this.players.values()).find(p => p.socket.id === socket.id);
         if (!player) {
-            console.log('[NormalMapGame] Player not found for position update');
+            console.log('[NormalMapGame] Player not found for velocity update');
             return;
         }
 
         try {
-            const posData = typeof data === 'string' ? JSON.parse(data) : data;
-            console.log('[NormalMapGame] Received position update:', posData);
+            const velocityData = typeof data === 'string' ? JSON.parse(data) : data;
             
-            if (posData.position) {
-                player.position = {
-                    x: posData.position.x || player.position.x,
-                    y: posData.position.y || player.position.y,
-                    z: posData.position.z || player.position.z
-                };
-                player.dirtyState.position = player.position; // Mark position as dirty
-            }
-
-            if (posData.velocity) {
+            if (velocityData.velocity) {
                 player.velocity = {
-                    x: posData.velocity.x || 0,
-                    y: posData.velocity.y || 0,
-                    z: posData.velocity.z || 0
+                    x: velocityData.velocity.x || 0,
+                    y: velocityData.velocity.y || 0,
+                    z: velocityData.velocity.z || 0
                 };
-                player.dirtyState.velocity = player.velocity; // Mark velocity as dirty
+                // Không mark dirty velocity ngay, sẽ đợi update loop tính position
             }
-
-            // Debug log (comment out sau khi test)
-            // console.log(`[NormalMapGame] Player ${player.id} position updated:`, player.position);
 
         } catch (error) {
-            console.error('[NormalMapGame] Error parsing position data:', error);
+            console.error('[NormalMapGame] Error parsing velocity data:', error);
         }
     }
 
     /**
-     * Update loop - broadcast player states đến tất cả clients
+     * Update loop - tính toán movement và broadcast player states
      */
     public update(deltaTime: number): void {
         super.update(deltaTime);
+
+        // Tính toán position của tất cả players dựa trên velocity
+        this.updatePlayerMovement(deltaTime);
 
         const currentTime = Date.now();
         
@@ -155,6 +147,25 @@ export class NormalMapGame extends GameController {
 
         // Broadcast player states
         this.broadcastPlayerStates();
+    }
+
+    /**
+     * Cập nhật vị trí của tất cả players dựa trên velocity
+     */
+    private updatePlayerMovement(deltaTime: number): void {
+        for (const player of this.players.values()) {
+            // Nếu player có velocity, tính toán position mới
+            if (player.velocity.x !== 0 || player.velocity.y !== 0 || player.velocity.z !== 0) {
+                // Công thức: newPosition = currentPosition + velocity * speed * deltaTime
+                player.position.x += player.velocity.x * player.speed * deltaTime;
+                player.position.y += player.velocity.y * player.speed * deltaTime;
+                player.position.z += player.velocity.z * player.speed * deltaTime;
+
+                // Mark position as dirty để broadcast
+                player.dirtyState.position = player.position;
+                player.dirtyState.velocity = player.velocity;
+            }
+        }
     }
 
     /**
