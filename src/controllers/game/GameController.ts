@@ -1,7 +1,6 @@
 import { AuthenticatedSocket } from '../../types';
 import { Server } from 'socket.io';
-import {  Player, IGameController, TrackablePlayerState } from '../../types/game'; 
-import { DirtyTracker } from '../../utils/DirtyTracker'; 
+import {  Player, IGameController, TrackablePlayerState } from '../../types/game';  
 
 export class GameController implements IGameController {
 
@@ -46,8 +45,6 @@ export class GameController implements IGameController {
             velocity: initialState.velocity,
             health: initialState.health,
             speed: initialState.speed,
-            dirtyTracker: new DirtyTracker<TrackablePlayerState>(initialState),
-            lastBroadcastTime: Date.now(),
         };
         
         this.setupEventListeners(player.socket);

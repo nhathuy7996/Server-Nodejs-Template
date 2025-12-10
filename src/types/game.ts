@@ -1,6 +1,5 @@
 // Game-related types
-import { AuthenticatedSocket, Vector3 } from ".";
-import { DirtyTracker } from "../utils/DirtyTracker";
+import { AuthenticatedSocket, Vector3 } from "."; 
 
 export enum GameType {
     NORMAL = "normal",
@@ -23,10 +22,7 @@ export interface Player {
     position: Vector3;
     velocity: Vector3;
     health: number;
-    speed: number;
-    lastUpdate?: number;
-    dirtyTracker?: DirtyTracker<TrackablePlayerState>;
-    lastBroadcastTime?: number;
+    speed: number; 
 }
 
 export interface GameRecord {

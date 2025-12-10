@@ -2,191 +2,179 @@ import { Server } from "socket.io";
 import { GameController } from "../GameController";
 import { AuthenticatedSocket } from "../../../types";
 import { IGameController, Player, TrackablePlayerState } from "../../../types/game";
+import { Vector3 } from "../../../types";
 
 export class NormalMapGame extends GameController {
 
     // Tốc độ broadcast tối đa (để tránh spam)
-    private static readonly MAX_BROADCAST_RATE = 60; // 20 FPS
+    private static readonly MAX_BROADCAST_RATE = 20; // 20 FPS
     private static readonly MIN_BROADCAST_INTERVAL = 1000 / NormalMapGame.MAX_BROADCAST_RATE; // 50ms
-    
+    private lastBroadcastTime: number = 0;
 
     constructor(io: Server) {
         super(io);
-    }
-
-    override setupEventListeners(socket: AuthenticatedSocket): void {
-        super.setupEventListeners(socket);
-        socket.on('player:onMove', (data) => this.onPlayerMove(socket, data));
-        socket.on('player:requestSync', () => this.onPlayerRequestSync(socket));
-    }
-
-    override async playerJoin(socket: AuthenticatedSocket): Promise<IGameController> {
-        const result = await super.playerJoin(socket);
-        
-        const player = Array.from(this.players.values()).find(p => p.socket.userId === socket.userId);
-        if (!player) {
-            console.error(`[NormalMapGame] playerJoin: Player not found after join (userId: ${socket.userId})`);
-            return result;
-        }
-
-        // Gửi toàn bộ state của tất cả players cho player mới join
-        setTimeout(() => {
-            console.log(`[NormalMapGame] Sending all players state to player ${player.id}`);
-            player.socket.emit('game:joined', { playerId: player.id });
-            this.broadcastAllPlayersState(socket);
-
-            this.players.forEach(p => {
-                p.socket.emit('game:playerJoined', { playerId: player.id });
-            });
-        }, 100); // Delay nhỏ để đảm bảo socket đã sẵn sàng
-        
-        return result;
-    }
-
-    override playerLeave(socket: AuthenticatedSocket): Player | null  {
-        const result = super.playerLeave(socket);
-       
-        if(result!== null)
-            this.players.forEach(p => {
-                p.socket.emit('game:playerLeft', { playerId: result!.id });
-            });
- 
-        return result;
+        this.lastBroadcastTime = Date.now();
     }
 
     /**
-     * Xử lý khi client request sync lại toàn bộ state
+     * Override playerJoin để gửi thông tin về player mới cho tất cả client
      */
-    private onPlayerRequestSync(socket: AuthenticatedSocket): void {
-        this.broadcastAllPlayersState(socket);
+    async playerJoin(socket: AuthenticatedSocket): Promise<IGameController> {
+        // Gọi base class để thêm player vào game
+        await super.playerJoin(socket);
+
+        // Tìm player vừa join
+        const newPlayer = Array.from(this.players.values()).find(p => p.socket.id === socket.id);
+        if (!newPlayer) {
+            return this;
+        }
+
+        // Gửi danh sách tất cả players hiện tại cho player mới join
+        const existingPlayers = Array.from(this.players.values())
+            .filter(p => p.id !== newPlayer.id)
+            .map(p => ({
+                id: p.id,
+                position: p.position,
+                velocity: p.velocity,
+                health: p.health,
+                speed: p.speed
+            }));
+
+        socket.emit('server:playerJoined', {
+            playerId: newPlayer.id,
+            players: existingPlayers
+        });
+
+        // Thông báo cho tất cả các client khác về player mới
+        socket.broadcast.emit('server:playerSpawned', {
+            id: newPlayer.id,
+            position: newPlayer.position,
+            velocity: newPlayer.velocity,
+            health: newPlayer.health,
+            speed: newPlayer.speed
+        });
+
+        console.log(`[NormalMapGame] Player ${newPlayer.id} joined. Total players: ${this.players.size}`);
+
+        return this;
     }
 
-    onPlayerMove(socket: AuthenticatedSocket, data: string): void {
+    /**
+     * Override playerLeave để thông báo cho các client khác
+     */
+    playerLeave(socket: AuthenticatedSocket): Player | null {
+        const player = super.playerLeave(socket);
         
-        const player = Array.from(this.players.values()).find(p => p.socket.userId === socket.userId);
-        if (!player) return;
+        if (player) {
+            // Thông báo cho tất cả client khác về player đã rời đi
+            socket.broadcast.emit('server:playerLeft', {
+                id: player.id
+            });
+
+            console.log(`[NormalMapGame] Player ${player.id} left. Remaining players: ${this.players.size}`);
+        }
+
+        return player;
+    }
+
+    /**
+     * Setup event listeners cho player movement
+     */
+    public setupEventListeners(socket: AuthenticatedSocket): void {
+        super.setupEventListeners(socket);
+
+        // Lắng nghe sự kiện cập nhật vị trí từ client
+        socket.on('client:updatePosition', (data) => {
+            this.handlePlayerUpdatePosition(socket, data);
+        });
+    }
+
+    /**
+     * Remove event listeners
+     */
+    public removeEventListeners(socket: AuthenticatedSocket): void {
+        super.removeEventListeners(socket); 
+        socket.removeAllListeners('client:updatePosition');
+    }
+
+    /**
+     * Xử lý cập nhật vị trí player từ client
+     */
+    private handlePlayerUpdatePosition(socket: AuthenticatedSocket, data: any): void {
+       
+        const player = Array.from(this.players.values()).find(p => p.socket.id === socket.id);
+        if (!player) {
+            console.log('[NormalMapGame] Player not found for position update');
+            return;
+        }
 
         try {
-            const parsedData = JSON.parse(data);
-            let newUpdates: Partial<TrackablePlayerState> = {};
-            for (const key in parsedData) {
-                 newUpdates[key as keyof TrackablePlayerState] = parsedData[key];
-            }
-            // Sử dụng updatePlayerState để tự động trigger dirty tracking
-            this.updatePlayerState(player.id, newUpdates);
-            // Optional: Validate movement (anti-cheat)
-            //this.validatePlayerMovement(player, parsedData);
+            const posData = typeof data === 'string' ? JSON.parse(data) : data;
+            console.log('[NormalMapGame] Received position update:', posData);
             
+            if (posData.position) {
+                player.position = {
+                    x: posData.position.x || player.position.x,
+                    y: posData.position.y || player.position.y,
+                    z: posData.position.z || player.position.z
+                };
+            }
+
+            if (posData.velocity) {
+                player.velocity = {
+                    x: posData.velocity.x || 0,
+                    y: posData.velocity.y || 0,
+                    z: posData.velocity.z || 0
+                };
+            }
+
+            // Debug log (comment out sau khi test)
+            // console.log(`[NormalMapGame] Player ${player.id} position updated:`, player.position);
+
         } catch (error) {
-            console.error('[NormalMapGame] Error parsing player move data:', error);
+            console.error('[NormalMapGame] Error parsing position data:', error);
         }
     }
 
-    override update(deltaTime: number): void {
-       this.broadcastPlayerUpdates();
-    }
-
-      /**
-     * Cập nhật state của player và đánh dấu dirty fields
-     */
-    protected updatePlayerState(playerId: number, newState: Partial<TrackablePlayerState>): void {
-        const player = this.players.get(playerId);
-        if (!player || !player.dirtyTracker) return;
-
-        // Cập nhật dirty tracker
-        player.dirtyTracker.updateState(newState);
-
-        // Cập nhật actual player properties
-        if (newState.position) player.position = { ...newState.position }; 
-        if (newState.velocity) player.velocity = { ...newState.velocity };
-        if (newState.health !== undefined) player.health = newState.health;
-        if (newState.speed !== undefined) player.speed = newState.speed;
-    }
-
     /**
-     * Broadcast chỉ những thay đổi cần thiết đến tất cả client
+     * Update loop - broadcast player states đến tất cả clients
      */
-    protected broadcastPlayerUpdates(): void {
+    public update(deltaTime: number): void {
+        super.update(deltaTime);
+
         const currentTime = Date.now();
-        const updates: any[] = []; 
-
-        // Collect all dirty changes từ tất cả players
-        for (const player of this.players) {
-            if (!player[1].dirtyTracker) continue; 
-
-            // Kiểm tra rate limiting
-            const timeSinceLastBroadcast = currentTime - (player[1].lastBroadcastTime || 0);
-            if (timeSinceLastBroadcast < NormalMapGame.MIN_BROADCAST_INTERVAL) {
-                // Record update without dirty fields (saved bandwidth) 
-                continue;
-            }
-
-            // Chỉ broadcast nếu có thay đổi
-            if (player[1].dirtyTracker.hasDirtyFields()) {
-                const changedData = player[1].dirtyTracker.getChangedData();
-                updates.push({
-                    id: player[0],
-                    ...changedData,
-                    timestamp: currentTime
-                });
-
-                // Clear dirty fields và update broadcast time
-                player[1].dirtyTracker.clearDirtyFields();
-                player[1].lastBroadcastTime = currentTime;
-            }  
+        
+        // Chỉ broadcast khi đủ thời gian (throttle)
+        if (currentTime - this.lastBroadcastTime < NormalMapGame.MIN_BROADCAST_INTERVAL) {
+            return;
         }
 
-        // Broadcast nếu có updates
-        if (updates.length > 0) {
-             
-            for(let p of this.players){
-                p[1].socket.emit('game:playerUpdates', updates);
-            }
-        }
+        this.lastBroadcastTime = currentTime;
 
+        // Broadcast player states
+        this.broadcastPlayerStates();
     }
 
     /**
-     * Broadcast toàn bộ state của tất cả players (dùng khi player mới join)
+     * Broadcast trạng thái của tất cả players
      */
-    protected broadcastAllPlayersState(targetSocket?: AuthenticatedSocket): void {
-        const playersData = Array.from(this.players.values()).map(player => ({
+    private broadcastPlayerStates(): void {
+        if (this.players.size === 0) return;
+
+        // Tạo danh sách trạng thái của tất cả players
+        const playerStates = Array.from(this.players.values()).map(player => ({
             id: player.id,
-            position: player.position, 
+            position: player.position,
             velocity: player.velocity,
-            health: player.health,
-            speed: player.speed,
-            timestamp: Date.now()
+            health: player.health
         }));
 
-        const event = 'game:allPlayersState';
-        if (targetSocket) {
-            targetSocket.emit(event, { players: playersData });
-        } else {
-            console.error(`[NormalMapGame] broadcastAllPlayersState called without targetSocket`);
-        }
-    }
+        // Broadcast đến tất cả clients
+        this.io.emit('server:playersUpdate', {
+            players: playerStates
+        });
 
-    /**
-     * Validate player movement để chống hack speed, teleport, etc.
-     */
-    private validatePlayerMovement(player: any, moveData: any): void {
-        // Implement validation logic here
-        // Ví dụ: kiểm tra tốc độ di chuyển, khoảng cách tối đa, etc.
-        
-        // Kiểm tra tốc độ di chuyển
-        const maxSpeed = player.speed * 2; // Allow some buffer
-        if (moveData.velocity) {
-            const speed = Math.sqrt(
-                moveData.velocity.x ** 2 + 
-                moveData.velocity.y ** 2 + 
-                moveData.velocity.z ** 2
-            );
-            
-            if (speed > maxSpeed) {
-                console.warn(`[NormalMapGame] Player ${player.id} exceeded speed limit: ${speed} > ${maxSpeed}`);
-                // Có thể disconnect hoặc reset position
-            }
-        }
+        // Debug log (comment out sau khi test)
+        // console.log(`[NormalMapGame] Broadcast ${playerStates.length} players`);
     }
 }
