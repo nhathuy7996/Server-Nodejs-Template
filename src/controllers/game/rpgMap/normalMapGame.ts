@@ -118,6 +118,7 @@ export class NormalMapGame extends GameController {
                     y: posData.position.y || player.position.y,
                     z: posData.position.z || player.position.z
                 };
+                player.dirtyState.position = player.position; // Mark position as dirty
             }
 
             if (posData.velocity) {
@@ -126,6 +127,7 @@ export class NormalMapGame extends GameController {
                     y: posData.velocity.y || 0,
                     z: posData.velocity.z || 0
                 };
+                player.dirtyState.velocity = player.velocity; // Mark velocity as dirty
             }
 
             // Debug log (comment out sau khi test)
@@ -157,24 +159,35 @@ export class NormalMapGame extends GameController {
 
     /**
      * Broadcast trạng thái của tất cả players
+     * Chỉ gửi những trường bị thay đổi (dirty fields)
      */
     private broadcastPlayerStates(): void {
         if (this.players.size === 0) return;
 
-        // Tạo danh sách trạng thái của tất cả players
-        const playerStates = Array.from(this.players.values()).map(player => ({
-            id: player.id,
-            position: player.position,
-            velocity: player.velocity,
-            health: player.health
-        }));
+        // Tạo danh sách chỉ chứa các fields đã thay đổi
+        const dirtyPlayerStates = Array.from(this.players.values())
+            .filter(player => Object.keys(player.dirtyState).length > 0) // Chỉ lấy players có dirty state
+            .map(player => ({
+                id: player.id,
+                ...player.dirtyState // Spread chỉ những fields dirty
+            }));
 
-        // Broadcast đến tất cả clients
-        this.io.emit('server:playersUpdate', {
-            players: playerStates
-        });
+        // Chỉ broadcast nếu có thay đổi
+        if (dirtyPlayerStates.length > 0) {
+            this.io.emit('server:playersUpdate', {
+                players: dirtyPlayerStates
+            });
 
-        // Debug log (comment out sau khi test)
-        // console.log(`[NormalMapGame] Broadcast ${playerStates.length} players`);
+            // Reset dirty state sau khi broadcast
+            dirtyPlayerStates.forEach(state => {
+                const player = this.players.get(state.id);
+                if (player) {
+                    player.dirtyState = {}; // Reset về empty object
+                }
+            });
+
+            // Debug log (comment out sau khi test)
+            // console.log(`[NormalMapGame] Broadcast ${dirtyPlayerStates.length} dirty players`);
+        }
     }
 }

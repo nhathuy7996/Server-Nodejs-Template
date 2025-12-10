@@ -22,7 +22,9 @@ export interface Player {
     position: Vector3;
     velocity: Vector3;
     health: number;
-    speed: number; 
+    speed: number;
+    // Dirty tracking: chỉ chứa các fields bị thay đổi
+    dirtyState: Partial<TrackablePlayerState>;
 }
 
 export interface GameRecord {

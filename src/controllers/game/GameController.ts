@@ -45,6 +45,7 @@ export class GameController implements IGameController {
             velocity: initialState.velocity,
             health: initialState.health,
             speed: initialState.speed,
+            dirtyState: {}
         };
         
         this.setupEventListeners(player.socket);
