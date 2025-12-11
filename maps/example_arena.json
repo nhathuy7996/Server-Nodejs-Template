@@ -1,0 +1,67 @@
+{
+  "id": "example_arena",
+  "name": "Example Arena",
+  "width": 50,
+  "length": 50,
+  "obstacles": [
+    {
+      "id": "wall_north",
+      "shape": "box",
+      "position": { "x": 0, "y": 2.5, "z": 25 },
+      "size": { "x": 50, "y": 5, "z": 1 }
+    },
+    {
+      "id": "wall_south",
+      "shape": "box",
+      "position": { "x": 0, "y": 2.5, "z": -25 },
+      "size": { "x": 50, "y": 5, "z": 1 }
+    },
+    {
+      "id": "wall_east",
+      "shape": "box",
+      "position": { "x": 25, "y": 2.5, "z": 0 },
+      "size": { "x": 1, "y": 5, "z": 50 }
+    },
+    {
+      "id": "wall_west",
+      "shape": "box",
+      "position": { "x": -25, "y": 2.5, "z": 0 },
+      "size": { "x": 1, "y": 5, "z": 50 }
+    },
+    {
+      "id": "center_box",
+      "shape": "box",
+      "position": { "x": 0, "y": 1.5, "z": 0 },
+      "size": { "x": 5, "y": 3, "z": 5 }
+    },
+    {
+      "id": "pillar_1",
+      "shape": "cylinder",
+      "position": { "x": -10, "y": 2.5, "z": 10 },
+      "size": { "x": 1, "y": 5, "z": 1 }
+    },
+    {
+      "id": "pillar_2",
+      "shape": "cylinder",
+      "position": { "x": 10, "y": 2.5, "z": 10 },
+      "size": { "x": 1, "y": 5, "z": 1 }
+    },
+    {
+      "id": "pillar_3",
+      "shape": "cylinder",
+      "position": { "x": -10, "y": 2.5, "z": -10 },
+      "size": { "x": 1, "y": 5, "z": 1 }
+    },
+    {
+      "id": "pillar_4",
+      "shape": "cylinder",
+      "position": { "x": 10, "y": 2.5, "z": -10 },
+      "size": { "x": 1, "y": 5, "z": 1 }
+    }
+  ],
+  "spawnPoints": [
+    { "x": 0, "y": 0, "z": -15 },
+    { "x": -5, "y": 0, "z": -15 },
+    { "x": 5, "y": 0, "z": -15 }
+  ]
+}

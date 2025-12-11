@@ -1,8 +1,10 @@
 import { Server } from "socket.io";
 import { GameController } from "../GameController";
-import { AuthenticatedSocket } from "../../../types";
+import { AuthenticatedSocket, MapData } from "../../../types";
 import { IGameController, Player, TrackablePlayerState } from "../../../types/game";
 import { Vector3 } from "../../../types";
+import { mapService } from "../../../services/mapService";
+import { CollisionDetector } from "../../../utils/collisionDetector";
 
 export class NormalMapGame extends GameController {
 
@@ -11,9 +13,25 @@ export class NormalMapGame extends GameController {
     private static readonly MIN_BROADCAST_INTERVAL = 1000 / NormalMapGame.MAX_BROADCAST_RATE; // 50ms
     private lastBroadcastTime: number = 0;
 
-    constructor(io: Server) {
+    // Map data
+    private mapData: MapData;
+    
+    // Player collision settings
+    private static readonly PLAYER_RADIUS = 0.5; // Bán kính collision của player
+    private static readonly PLAYER_HEIGHT = 1.8; // Chiều cao player
+
+    constructor(io: Server, mapId: string = 'training_ground') {
         super(io);
         this.lastBroadcastTime = Date.now();
+        
+        // Load map data
+        const map = mapService.getMap(mapId);
+        if (!map) {
+            throw new Error(`Map ${mapId} not found`);
+        }
+        this.mapData = map;
+        
+        console.log(`[NormalMapGame] Initialized with map: ${this.mapData.name} (${this.mapData.obstacles.length} obstacles)`);
     }
 
     /**
@@ -27,6 +45,12 @@ export class NormalMapGame extends GameController {
         const newPlayer = Array.from(this.players.values()).find(p => p.socket.id === socket.id);
         if (!newPlayer) {
             return this;
+        }
+
+        // Set spawn position từ map
+        const spawnPoint = mapService.getRandomSpawnPoint(this.mapData.id);
+        if (spawnPoint) {
+            newPlayer.position = spawnPoint;
         }
 
         // Gửi danh sách tất cả players hiện tại cho player mới join
@@ -43,7 +67,8 @@ export class NormalMapGame extends GameController {
         socket.emit('server:playerJoined', {
             playerId: newPlayer.id,
             position: newPlayer.position, // Gửi position ban đầu cho player mới
-            players: existingPlayers
+            players: existingPlayers,
+            mapData: this.mapData // Gửi map data cho client
         });
 
         // Thông báo cho tất cả các client khác về player mới
@@ -156,49 +181,81 @@ export class NormalMapGame extends GameController {
         for (const player of this.players.values()) {
             // Nếu player có velocity, tính toán position mới
             if (player.velocity.x !== 0 || player.velocity.y !== 0 || player.velocity.z !== 0) {
-                // Công thức: newPosition = currentPosition + velocity * speed * deltaTime
-                player.position.x += player.velocity.x * player.speed * deltaTime;
-                player.position.y += player.velocity.y * player.speed * deltaTime;
-                player.position.z += player.velocity.z * player.speed * deltaTime;
+                // Tính position mới
+                const newPosition: Vector3 = {
+                    x: player.position.x + player.velocity.x * player.speed * deltaTime,
+                    y: player.position.y + player.velocity.y * player.speed * deltaTime,
+                    z: player.position.z + player.velocity.z * player.speed * deltaTime
+                };
 
-                // Mark position as dirty để broadcast
-                player.dirtyState.position = player.position;
-                player.dirtyState.velocity = player.velocity;
+                // Kiểm tra map bounds
+                if (!CollisionDetector.isInMapBounds(newPosition, this.mapData.width, this.mapData.length)) {
+                    // Clamp vào trong map
+                    newPosition.x = Math.max(-this.mapData.width / 2, Math.min(this.mapData.width / 2, newPosition.x));
+                    newPosition.z = Math.max(-this.mapData.length / 2, Math.min(this.mapData.length / 2, newPosition.z));
+                }
+
+                // Kiểm tra collision với obstacles
+                const collisionResult = CollisionDetector.checkCollision(
+                    newPosition,
+                    NormalMapGame.PLAYER_RADIUS,
+                    NormalMapGame.PLAYER_HEIGHT,
+                    this.mapData.obstacles
+                );
+
+                // Nếu không có collision, cập nhật position
+                if (!collisionResult.hasCollision) {
+                    player.position = newPosition;
+                    
+                    // Mark position as dirty để broadcast
+                    player.dirtyState.position = player.position;
+                    player.dirtyState.velocity = player.velocity;
+                } else {
+                    // Có collision - không di chuyển, có thể thông báo client
+                    // console.log(`[NormalMapGame] Player ${player.id} collided with ${collisionResult.obstacle?.id}`);
+                }
             }
         }
     }
 
     /**
      * Broadcast trạng thái của tất cả players
-     * Chỉ gửi những trường bị thay đổi (dirty fields)
+     * Gửi dirty states với đầy đủ position để client có thể correct
      */
     private broadcastPlayerStates(): void {
         if (this.players.size === 0) return;
 
-        // Tạo danh sách chỉ chứa các fields đã thay đổi
+        const currentTime = Date.now();
+
+        // Gửi dirty states (những players có thay đổi)
         const dirtyPlayerStates = Array.from(this.players.values())
-            .filter(player => Object.keys(player.dirtyState).length > 0) // Chỉ lấy players có dirty state
-            .map(player => ({
-                id: player.id,
-                ...player.dirtyState // Spread chỉ những fields dirty
-            }));
+            .filter(player => Object.keys(player.dirtyState).length > 0)
+            .map(player => {
+                player.sequenceNumber++;
+                player.lastSyncTime = currentTime;
+                
+                return {
+                    id: player.id,
+                    ...player.dirtyState,
+                    timestamp: currentTime,
+                    sequenceNumber: player.sequenceNumber
+                };
+            });
 
         // Chỉ broadcast nếu có thay đổi
         if (dirtyPlayerStates.length > 0) {
             this.io.emit('server:playersUpdate', {
-                players: dirtyPlayerStates
+                players: dirtyPlayerStates,
+                timestamp: currentTime
             });
 
             // Reset dirty state sau khi broadcast
             dirtyPlayerStates.forEach(state => {
                 const player = this.players.get(state.id);
                 if (player) {
-                    player.dirtyState = {}; // Reset về empty object
+                    player.dirtyState = {};
                 }
             });
-
-            // Debug log (comment out sau khi test)
-            // console.log(`[NormalMapGame] Broadcast ${dirtyPlayerStates.length} dirty players`);
         }
     }
 }

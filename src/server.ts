@@ -13,6 +13,7 @@ import publicRouter from './routes/publicRouter';
 import { createRedisAdapter, closeRedisConnections } from './config/redis'; 
 import fetch from 'node-fetch'; 
 import { gamePlayServices } from "./services/gamePlayServices";
+import { MapLoader } from "./utils/mapLoader";
 
 dotenv.config();
 
@@ -183,6 +184,10 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
 // Start server
 try {
     initSocketIO().then(io => {
+        // Load maps from files
+        console.log('📁 Loading maps from files...');
+        MapLoader.loadAllMapsFromDirectory();
+        
         httpServer.listen(HTTP_PORT, () => {
             console.log(`Server is running on http://localhost:${HTTP_PORT}`);
             console.log('Working directory:', __dirname);

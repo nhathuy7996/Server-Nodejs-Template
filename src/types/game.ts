@@ -14,6 +14,7 @@ export interface TrackablePlayerState {
     velocity: Vector3;
     health: number;
     speed: number;
+    timestamp?: number; // Server timestamp để client sync
 }
 
 export interface Player {
@@ -25,6 +26,9 @@ export interface Player {
     speed: number;
     // Dirty tracking: chỉ chứa các fields bị thay đổi
     dirtyState: Partial<TrackablePlayerState>;
+    // Sequence number để track updates
+    sequenceNumber: number;
+    lastSyncTime: number; // Timestamp của lần sync cuối
 }
 
 export interface GameRecord {

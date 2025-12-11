@@ -25,3 +25,6 @@ export interface Vector2{
     x: number,
     y: number
 }
+
+// Export map types
+export * from './map';

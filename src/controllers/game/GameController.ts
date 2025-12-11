@@ -36,6 +36,7 @@ export class GameController implements IGameController {
             velocity: { x: 0, y: 0, z: 0 },
             health: 100,
             speed: 1,
+            timestamp: Date.now()
         };
 
         const player: Player = {
@@ -45,7 +46,9 @@ export class GameController implements IGameController {
             velocity: initialState.velocity,
             health: initialState.health,
             speed: initialState.speed,
-            dirtyState: {}
+            dirtyState: {},
+            sequenceNumber: 0,
+            lastSyncTime: Date.now()
         };
         
         this.setupEventListeners(player.socket);
