@@ -49,6 +49,7 @@ export const authSocketToken = (socket: AuthenticatedSocket, next: (err?: Error)
 
         // Temporarily allow connections without token for debugging
         if (!token) {
+            
             console.log('⚠️ No token provided, but allowing connection for debugging');
             
             token = socket.handshake.query.token;
@@ -62,6 +63,7 @@ export const authSocketToken = (socket: AuthenticatedSocket, next: (err?: Error)
         console.error('❌ Socket authentication error:', error);
         // Temporarily allow connection even with invalid token for debugging
         console.log('⚠️ Invalid token, but allowing connection for debugging');
+        
         socket.userId = 'anonymous';
         next();
     }

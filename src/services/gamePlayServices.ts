@@ -2,6 +2,7 @@ import { AuthenticatedSocket } from '../types';
 import { Server } from 'socket.io';
 import { GameController } from '../controllers/game/GameController';
 import { IGameController } from '../types/game';
+import { NormalMapController } from '../controllers/game/rpgGame/NormalMapController';
 
 
 // Map để quản lý các game controller
@@ -13,21 +14,17 @@ export const gamePlayServices = (socket: AuthenticatedSocket, io: Server) => {
     socket.on('startGame', async (data) => {
         
         // Kiểm tra xem đã có game session nào cho socket này chưa
-        const existingGame = gameSessions.get(socket.userId!);
+        const existingGame = gameSessions.get("1");
         if (existingGame) {
-            // Nếu đã có game session, cleanup trước khi tạo mới
-            existingGame.cleanup();
-            gameSessions.delete(socket.userId!);
+           existingGame.playerJoin(socket);
+           return;
         }
 
-        
-        const dataParse = JSON.parse(data);
-      
         // Tạo game controller mới
-        const gameController = await new GameController( io).playerJoin(socket);
+        const gameController = await new NormalMapController( io).playerJoin(socket);
         
         // Lưu vào map
-        gameSessions.set(socket.userId!, gameController);
+        gameSessions.set("1", gameController);
     });
 
     socket.on('reconnectGame', (data) => {

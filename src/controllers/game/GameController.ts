@@ -101,6 +101,7 @@ export class GameController implements IGameController {
      * Update loop - tự động gọi method update() định kỳ
      */
     private startUpdateLoop(): void {
+        console.log(`[GameController] Starting update loop with interval ${GameController.UPDATE_INTERVAL} ms`);
         this.updateInterval = setInterval(() => {
             if (!this.isActive) return;
 
