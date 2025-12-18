@@ -34,14 +34,18 @@ export class GameController implements IGameController {
         this.lastUpdateTime = Date.now();
     }
     async playerJoin(socket: AuthenticatedSocket): Promise<IGameController> {
-        const player = {
+        const player: Player = {
             id: this.players.length + 1,
             socket: socket,
-            position: { x: 0, y: 0, z: 0 },
-            rotation: { x: 0, y: 0, z: 0 },
-            velocity: { x: 0, y: 0, z: 0 },
-            health: 100,
-            speed: 1,
+            currenState:{
+                position: { x: -0.9, y: 0.5, z: 0 },
+                rotation: { x: 0, y: 0, z: 0 },
+                velocity: { x: 0, y: 0, z: 0 },
+                health: 100,
+                speed: 1,
+            },
+            dirtyState:{},
+            lastSyncState:{}
         }
         this.setupEventListeners(player.socket);
         this.players.push(player);

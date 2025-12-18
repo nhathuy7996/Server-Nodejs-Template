@@ -8,15 +8,22 @@ export enum GameType {
     SURVIVAL = "survival"
 }
 
-export interface Player {
-    id: number;
-    socket: AuthenticatedSocket;
+export interface TrackaleDataPlayer{
     position: Vector3;
     rotation: Vector3;
     velocity: Vector3;
     health: number;
     speed: number;
-    lastUpdate?: number;
+}
+
+export interface Player {
+    id: number;
+    socket: AuthenticatedSocket;
+    currenState: TrackaleDataPlayer;
+    dirtyState: Partial<TrackaleDataPlayer>;
+    lastSyncState: Partial<TrackaleDataPlayer>;
+   
+    lastSyncTime?: number;
 }
 
 export interface GameRecord {
