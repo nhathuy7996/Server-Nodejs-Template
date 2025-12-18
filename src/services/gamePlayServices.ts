@@ -14,7 +14,7 @@ export const gamePlayServices = (socket: AuthenticatedSocket, io: Server) => {
     socket.on('startGame', async (data) => {
         
         // Kiểm tra xem đã có game session nào cho socket này chưa
-        const existingGame = gameSessions.get("1");
+        const existingGame = gameSessions.get("training_ground");
         if (existingGame) {
             existingGame.playerJoin(socket);
             return;
@@ -24,10 +24,10 @@ export const gamePlayServices = (socket: AuthenticatedSocket, io: Server) => {
         const dataParse = JSON.parse(data);
       
         // Tạo game controller mới
-        const gameController = await new NormalMapGame(io).playerJoin(socket);
+        const gameController = await new NormalMapGame(io, 'training_ground').playerJoin(socket);
         
         // Lưu vào map
-        gameSessions.set("1", gameController);
+        gameSessions.set("training_ground", gameController);
     });
 
     socket.on('reconnectGame', (data) => {
@@ -54,7 +54,7 @@ export const gamePlayServices = (socket: AuthenticatedSocket, io: Server) => {
     // Xử lý khi client disconnect
     socket.on('disconnect', () => {
        
-        const gameController = gameSessions.get("1");
+        const gameController = gameSessions.get("training_ground");
         gameController?.playerLeave(socket);
          
     });

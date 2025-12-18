@@ -19,17 +19,19 @@ export class GameController implements IGameController {
 
     // Thông tin player
     protected players: Map<number, Player> = new Map();
-    protected lastID: number = 0;
+    protected lastID: number = 0; 
+    gameId: string = '';
 
 
-    constructor( io: Server) {
+    constructor( io: Server, gameId: string = 'gameRoom') {
         
         this.io = io;
-        
+        this.gameId = gameId;
          
         this.startTime = Date.now();
         this.lastUpdateTime = Date.now(); 
     }
+    
     async playerJoin(socket: AuthenticatedSocket): Promise<IGameController> {
         const initialState: TrackablePlayerState = {
             position: { x: 0, y: 0, z: 0 }, 
@@ -53,6 +55,7 @@ export class GameController implements IGameController {
         
         this.setupEventListeners(player.socket);
         this.players.set(player.id, player);
+        socket.join(this.gameId);
 
         if(!this.updateInterval){
           this.startUpdateLoop();
@@ -69,6 +72,7 @@ export class GameController implements IGameController {
         if(!player)
             return null;
 
+        socket.leave(this.gameId);
         this.removeEventListeners(player.socket);
 
         this.players.delete(player.id);

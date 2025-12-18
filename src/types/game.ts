@@ -46,6 +46,7 @@ export interface GameRecord {
 export interface IGameController {
 
     isActive: boolean;
+    gameId: string;
 
     setupEventListeners(socket: AuthenticatedSocket): void ;
 

@@ -21,7 +21,7 @@ export class NormalMapGame extends GameController {
     private static readonly PLAYER_HEIGHT = 1.8; // Chiều cao player
 
     constructor(io: Server, mapId: string = 'training_ground') {
-        super(io);
+        super(io, mapId);
         this.lastBroadcastTime = Date.now();
         
         // Load map data
@@ -30,7 +30,6 @@ export class NormalMapGame extends GameController {
             throw new Error(`Map ${mapId} not found`);
         }
         this.mapData = map;
-        
         console.log(`[NormalMapGame] Initialized with map: ${this.mapData.name} (${this.mapData.obstacles.length} obstacles)`);
     }
 
@@ -72,7 +71,7 @@ export class NormalMapGame extends GameController {
         });
 
         // Thông báo cho tất cả các client khác về player mới
-        socket.broadcast.emit('server:playerSpawned', {
+        socket.broadcast.to(this.gameId).emit('server:playerSpawned', {
             id: newPlayer.id,
             position: newPlayer.position,
             velocity: newPlayer.velocity,
@@ -93,7 +92,7 @@ export class NormalMapGame extends GameController {
         
         if (player) {
             // Thông báo cho tất cả client khác về player đã rời đi
-            socket.broadcast.emit('server:playerLeft', {
+            socket.broadcast.to(this.gameId).emit('server:playerLeft', {
                 id: player.id
             });
 
@@ -244,7 +243,7 @@ export class NormalMapGame extends GameController {
 
         // Chỉ broadcast nếu có thay đổi
         if (dirtyPlayerStates.length > 0) {
-            this.io.emit('server:playersUpdate', {
+            this.io.to(this.gameId).emit('server:playersUpdate', {
                 players: dirtyPlayerStates,
                 timestamp: currentTime
             });
