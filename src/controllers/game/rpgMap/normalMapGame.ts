@@ -5,6 +5,7 @@ import { IGameController, Player, TrackablePlayerState } from "../../../types/ga
 import { Vector3 } from "../../../types";
 import { mapService } from "../../../services/mapService";
 import { CollisionDetector } from "../../../utils/collisionDetector";
+import { Bot } from "../../../entities/Bot";
 
 export class NormalMapGame extends GameController {
 
@@ -15,6 +16,9 @@ export class NormalMapGame extends GameController {
 
     // Map data
     private mapData: MapData;
+    
+    // Bots list
+    private bots: Bot[] = [];
     
     // Player collision settings
     private static readonly PLAYER_RADIUS = 0.5; // Bán kính collision của player
@@ -31,6 +35,9 @@ export class NormalMapGame extends GameController {
         }
         this.mapData = map;
         console.log(`[NormalMapGame] Initialized with map: ${this.mapData.name} (${this.mapData.obstacles.length} obstacles)`);
+        
+        // Spawn initial bots
+        this.spawnBots();
     }
 
     /**
@@ -68,6 +75,20 @@ export class NormalMapGame extends GameController {
             position: newPlayer.position, // Gửi position ban đầu cho player mới
             players: existingPlayers,
             mapData: this.mapData // Gửi map data cho client
+        });
+
+        // Gửi thông tin về các bots hiện tại cho player mới
+        const botsData = this.bots.map(bot => ({
+            id: bot.id,
+            position: bot.position,
+            velocity: bot.velocity,
+            hp: bot.hp,
+            dmg: bot.dmg,
+            speed: bot.speed
+        }));
+
+        socket.emit('server:botsSpawned', {
+            bots: botsData
         });
 
         // Thông báo cho tất cả các client khác về player mới
@@ -157,6 +178,9 @@ export class NormalMapGame extends GameController {
     public update(deltaTime: number): void {
         super.update(deltaTime);
 
+        // Update all bots
+        this.updateBots(deltaTime);
+
         // Tính toán position của tất cả players dựa trên velocity
         this.updatePlayerMovement(deltaTime);
 
@@ -171,6 +195,55 @@ export class NormalMapGame extends GameController {
 
         // Broadcast player states
         this.broadcastPlayerStates();
+        
+        // Broadcast bot states
+        this.broadcastBotStates();
+    }
+
+    /**
+     * Update all bots
+     */
+    private updateBots(deltaTime: number): void {
+        for (const bot of this.bots) {
+            bot.update(deltaTime);
+        }
+    }
+
+    /**
+     * Spawn initial bots when game starts
+     */
+    private spawnBots(): void {
+        const botCount = 3;
+        
+        for (let i = 0; i < botCount; i++) {
+            const spawnPosition = this.getRandomPositionOnMap();
+            const bot = new Bot(
+                `bot_${i + 1}`,
+                spawnPosition,
+                this.mapData, // Truyền mapData vào bot
+                3.0, // speed
+                100, // hp
+                10 // dmg
+            );
+            
+            this.bots.push(bot);
+            console.log(`[NormalMapGame] Spawned ${bot.id} at position (${spawnPosition.x.toFixed(2)}, ${spawnPosition.z.toFixed(2)})`);
+        }
+        
+        console.log(`[NormalMapGame] Spawned ${botCount} bots`);
+    }
+
+    /**
+     * Get random position on map (avoiding map edges)
+     */
+    private getRandomPositionOnMap(): Vector3 {
+        const margin = 10; // Khoảng cách từ biên
+        
+        return {
+            x: (Math.random() - 0.5) * (this.mapData.width - margin * 2),
+            y: 0,
+            z: (Math.random() - 0.5) * (this.mapData.length - margin * 2)
+        };
     }
 
     /**
@@ -256,5 +329,27 @@ export class NormalMapGame extends GameController {
                 }
             });
         }
+    }
+
+    /**
+     * Broadcast trạng thái của tất cả bots
+     */
+    private broadcastBotStates(): void {
+        if (this.bots.length === 0) return;
+
+        const currentTime = Date.now();
+
+        // Gửi trạng thái của tất cả bots
+        const botStates = this.bots.map(bot => ({
+            id: bot.id,
+            position: bot.position,
+            velocity: bot.velocity,
+            hp: bot.hp
+        }));
+
+        this.io.to(this.gameId).emit('server:botsUpdate', {
+            bots: botStates,
+            timestamp: currentTime
+        });
     }
 }
