@@ -168,8 +168,8 @@ export class Bot {
     }
 
     /**
-     * Calculate steering avoidance force to avoid obstacles
-     * Only apply force for obstacles in front of the bot's movement direction
+     * Calculate steering avoidance force using raycast
+     * Cast ray in movement direction to find nearest obstacle
      */
     private calculateAvoidanceForce(): Vector3 {
         const avoidanceForce: Vector3 = { x: 0, y: 0, z: 0 };
@@ -185,47 +185,92 @@ export class Bot {
             z: this.velocity.z / velocityMag
         };
         
+        // Raycast parameters
+        const rayLength = Bot.AVOIDANCE_DISTANCE;
+        let nearestObstacle: Obstacle | null = null;
+        let nearestDistance = rayLength;
+        
+        // Cast ray to find nearest obstacle in movement direction
         for (const obstacle of this.obstacles) {
+            // Get obstacle center and radius
+            const obstacleCenter = {
+                x: obstacle.position.x,
+                z: obstacle.position.z
+            };
+            const obstacleRadius = Math.max(obstacle.size.x, obstacle.size.z) / 2;
+            
             // Vector from bot to obstacle
             const toObstacle = {
-                x: obstacle.position.x - this.position.x,
-                z: obstacle.position.z - this.position.z
+                x: obstacleCenter.x - this.position.x,
+                z: obstacleCenter.z - this.position.z
             };
             
-            const distanceToObstacle = Math.sqrt(toObstacle.x * toObstacle.x + toObstacle.z * toObstacle.z);
+            // Project obstacle onto ray (dot product)
+            const projection = toObstacle.x * moveDir.x + toObstacle.z * moveDir.z;
             
-            if (distanceToObstacle < 0.01) continue;
+            // Skip if obstacle is behind or too far
+            if (projection <= 0 || projection > rayLength) {
+                continue;
+            }
             
-            // Normalize direction to obstacle
-            const dirToObstacle = {
-                x: toObstacle.x / distanceToObstacle,
-                z: toObstacle.z / distanceToObstacle
+            // Find closest point on ray to obstacle center
+            const closestPointOnRay = {
+                x: this.position.x + moveDir.x * projection,
+                z: this.position.z + moveDir.z * projection
             };
             
-            // Check if obstacle is in front of bot (dot product > 0)
-            const dotProduct = moveDir.x * dirToObstacle.x + moveDir.z * dirToObstacle.z;
+            // Distance from obstacle center to ray
+            const distanceToRay = Math.sqrt(
+                Math.pow(obstacleCenter.x - closestPointOnRay.x, 2) +
+                Math.pow(obstacleCenter.z - closestPointOnRay.z, 2)
+            );
             
-            // Only avoid obstacles in front (within 90 degree cone)
-            if (dotProduct > 0) {
-                // Get obstacle radius (approximate)
-                const obstacleRadius = Math.max(obstacle.size.x, obstacle.size.z) / 2;
-                const effectiveDistance = distanceToObstacle - obstacleRadius;
+            // Check if ray intersects with obstacle (including bot radius)
+            const totalRadius = obstacleRadius + Bot.BOT_RADIUS;
+            
+            if (distanceToRay <= totalRadius) {
+                // Calculate actual intersection distance along ray
+                const intersectionOffset = Math.sqrt(
+                    Math.max(0, totalRadius * totalRadius - distanceToRay * distanceToRay)
+                );
+                const intersectionDistance = projection - intersectionOffset;
                 
-                // If within avoidance distance, apply repulsion force
-                if (effectiveDistance < Bot.AVOIDANCE_DISTANCE && effectiveDistance > 0) {
-                    // Calculate repulsion strength (stronger when closer and more aligned)
-                    const distanceStrength = (Bot.AVOIDANCE_DISTANCE - effectiveDistance) / Bot.AVOIDANCE_DISTANCE;
-                    const alignmentStrength = dotProduct; // 0 to 1 based on alignment
-                    const strength = distanceStrength * alignmentStrength;
-                    const force = strength * Bot.AVOIDANCE_FORCE;
-                    
-                    // Direction away from obstacle
-                    const awayX = -dirToObstacle.x;
-                    const awayZ = -dirToObstacle.z;
-                    
-                    avoidanceForce.x += awayX * force;
-                    avoidanceForce.z += awayZ * force;
+                // Track nearest obstacle
+                if (intersectionDistance < nearestDistance && intersectionDistance > 0) {
+                    nearestDistance = intersectionDistance;
+                    nearestObstacle = obstacle;
                 }
+            }
+        }
+        
+        // Apply avoidance force only for nearest obstacle
+        if (nearestObstacle) {
+            const obstacleCenter = {
+                x: nearestObstacle.position.x,
+                z: nearestObstacle.position.z
+            };
+            
+            // Direction from obstacle to bot (perpendicular avoidance)
+            const toBot = {
+                x: this.position.x - obstacleCenter.x,
+                z: this.position.z - obstacleCenter.z
+            };
+            
+            const toBotMag = Math.sqrt(toBot.x * toBot.x + toBot.z * toBot.z);
+            
+            if (toBotMag > 0.01) {
+                const dirAwayFromObstacle = {
+                    x: toBot.x / toBotMag,
+                    z: toBot.z / toBotMag
+                };
+                
+                // Force strength based on distance (closer = stronger)
+                const distanceStrength = (rayLength - nearestDistance) / rayLength;
+                const force = distanceStrength * Bot.AVOIDANCE_FORCE;
+                
+                // Apply perpendicular force (away from obstacle)
+                avoidanceForce.x = dirAwayFromObstacle.x * force;
+                avoidanceForce.z = dirAwayFromObstacle.z * force;
             }
         }
         
