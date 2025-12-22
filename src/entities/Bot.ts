@@ -15,6 +15,12 @@ export class Bot {
     private mapLength: number;
     private obstacles: Obstacle[];
     
+    // Idle behavior
+    private isIdle: boolean = false;
+    private idleTimer: number = 0;
+    private static readonly MIN_IDLE_DURATION = 1.0; // Thời gian idle tối thiểu (giây)
+    private static readonly MAX_IDLE_DURATION = 3.0; // Thời gian idle tối đa (giây)
+    
     // Bot physics
     private static readonly BOT_RADIUS = 0.5; // Bán kính collision của bot
     private static readonly BOT_HEIGHT = 1.8; // Chiều cao bot
@@ -49,6 +55,18 @@ export class Bot {
      * @param deltaTime Time elapsed since last update in seconds
      */
     public update(deltaTime: number): void {
+        // Update idle state
+        if (this.isIdle) {
+            this.idleTimer -= deltaTime;
+            if (this.idleTimer <= 0) {
+                this.isIdle = false;
+                this.selectNewTarget();
+            }
+            // Don't move while idle
+            this.velocity = { x: 0, y: 0, z: 0 };
+            return;
+        }
+        
         // Get desired velocity from patrol behavior
         const desiredVelocity = this.updatePatrol();
         
@@ -117,8 +135,8 @@ export class Bot {
 
         // Nếu đã đến gần target
         if (distance <= Bot.ARRIVAL_THRESHOLD) {
-            // Chọn target mới
-            this.selectNewTarget();
+            // Enter idle state
+            this.startIdle();
             return { x: 0, y: 0, z: 0 };
         } else {
             // Return normalized direction toward target
@@ -275,6 +293,18 @@ export class Bot {
         }
         
         return avoidanceForce;
+    }
+
+    /**
+     * Start idle state with random duration
+     */
+    private startIdle(): void {
+        this.isIdle = true;
+        // Random idle duration between MIN and MAX
+        const randomDuration = Bot.MIN_IDLE_DURATION + 
+            Math.random() * (Bot.MAX_IDLE_DURATION - Bot.MIN_IDLE_DURATION);
+        this.idleTimer = randomDuration;
+        this.velocity = { x: 0, y: 0, z: 0 };
     }
 
     /**
