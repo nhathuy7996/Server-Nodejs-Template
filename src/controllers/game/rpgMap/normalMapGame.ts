@@ -213,7 +213,7 @@ export class NormalMapGame extends GameController {
      * Spawn initial bots when game starts
      */
     private spawnBots(): void {
-        const botCount = 3;
+        const botCount = 10;
         
         for (let i = 0; i < botCount; i++) {
             const spawnPosition = this.getRandomPositionOnMap();
