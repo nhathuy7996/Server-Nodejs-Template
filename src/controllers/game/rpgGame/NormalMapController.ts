@@ -13,7 +13,14 @@ export class NormalMapController extends GameController  {
         console.log(`Player ${socket.id} is joining NormalMapController`);
         await super.playerJoin(socket);
        
+       
+        let newPlayer = this.players.find(p => p.socket.id === socket.id);
+        let newPlayerID = newPlayer?.id;
+        newPlayer!.currenState.position = { x: Math.random() * 10, y: 0, z: Math.random() * 10 };
 
+        socket.emit('server:playerJoined', { id: newPlayerID, position: newPlayer!.currenState.position } );
+
+        socket.broadcast.emit('server:newPlayerJoined', { id: newPlayerID, position: newPlayer!.currenState.position });
         return this;
     }
 

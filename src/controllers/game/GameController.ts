@@ -38,7 +38,7 @@ export class GameController implements IGameController {
             id: this.players.length + 1,
             socket: socket,
             currenState:{
-                position: { x: -0.9, y: 0.5, z: 0 },
+                position: { x: 0, y: 0, z: 0 },
                 rotation: { x: 0, y: 0, z: 0 },
                 velocity: { x: 0, y: 0, z: 0 },
                 health: 100,
