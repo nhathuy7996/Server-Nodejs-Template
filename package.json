@@ -10,9 +10,7 @@
     "doc": "tsrpc doc",
     "dev": "ts-node src/server.ts",
     "test": "mocha test/**/*.test.ts",
-    "prebuild": "node updateVersion.js",
     "build": "tsc && cp .env dist && cp -r src/public dist/ && rsync -azv -e 'ssh' ./ nhathuy7996.art:CODE/Army/ && ssh nhathuy7996.art \"/root/.nvm/versions/node/v22.19.0/bin/pm2 restart army\"",
-    "preup": "node updateVersion.js",
     "up": "cp -r src/public dist/ && rsync -azv -e 'ssh' ./ nhathuy7996.art:CODE/Army/"
   },
   "devDependencies": {

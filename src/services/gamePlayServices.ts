@@ -21,7 +21,7 @@ export const gamePlayServices = (socket: AuthenticatedSocket, io: Server) => {
         }
 
         // Tạo game controller mới
-        const gameController = await new NormalMapController( io).playerJoin(socket);
+        const gameController = await new NormalMapController( io, 'training_ground').playerJoin(socket);
         
         // Lưu vào map
         gameSessions.set("1", gameController);

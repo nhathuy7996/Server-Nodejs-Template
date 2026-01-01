@@ -2,11 +2,20 @@ import { Server } from "socket.io";
 import { GameController } from "../GameController";
 import { AuthenticatedSocket } from "../../../types";
 import { TrackaleDataPlayer } from "../../../types/game";
+import { CollisionDetector } from "../../../utils/collisionDetector";
+import { MapData } from "../../../types/map";
 
 export class NormalMapController extends GameController  {
-    constructor(io: Server) {
+
+    private MapData: MapData | null = null;
+    private PlayerRadius: number = 0.5;
+    private PlayerHeight: number = 1.8;
+
+    constructor(io: Server, mapID: string = "normal_map_01") {
         console.log("Creating NormalMapController");
         super(io);
+        this.MapData = CollisionDetector.loadMap(mapID);
+     
     }
 
     override async playerJoin(socket: any) {
@@ -16,8 +25,13 @@ export class NormalMapController extends GameController  {
        
         let newPlayer = this.players.find(p => p.socket.id === socket.id);
         let newPlayerID = newPlayer?.id;
-        newPlayer!.currenState.position = { x: Math.random() * 10, y: 0, z: Math.random() * 10 };
+        const spawnPoints = this.MapData?.spawnPoints;
+        if(spawnPoints && spawnPoints.length > 0){
+            const randomIndex = Math.floor(Math.random() * spawnPoints.length);
+            newPlayer!.currenState.position = spawnPoints[randomIndex];
+        }
 
+        socket.emit('server:mapData',this.MapData );
         socket.emit('server:playerJoined', { id: newPlayerID, position: newPlayer!.currenState.position } );
 
         socket.broadcast.emit('server:newPlayerJoined', { id: newPlayerID, position: newPlayer!.currenState.position });
@@ -49,9 +63,26 @@ export class NormalMapController extends GameController  {
 
     private updatePlayerPositions(deltaTime: number): void {
         this.players.forEach(player => {
-            player.currenState.position.x += player.currenState.velocity.x * deltaTime * player.currenState.speed;
+
+            const newX = player.currenState.position.x + player.currenState.velocity.x * deltaTime * player.currenState.speed;
             //player.position.y += player.velocity.y * deltaTime * player.speed;
-            player.currenState.position.z += player.currenState.velocity.z * deltaTime * player.currenState.speed;
+            const newZ = player.currenState.position.z + player.currenState.velocity.z * deltaTime * player.currenState.speed;
+            const newPosition = { x: newX, y: player.currenState.position.y, z: newZ };
+
+            player.currenState.position = newPosition;
+
+            // const collisionResult = CollisionDetector.checkCollision(
+            //     newPosition,
+            //     this.PlayerRadius,
+            //     this.PlayerHeight,
+            //     this.MapData ? this.MapData.obstacles : []
+            // );
+
+            // if (!collisionResult.hasCollision) {
+            //     player.currenState.position.x = newX;
+            //     //player.position.y = newY;
+            //     player.currenState.position.z = newZ;
+            // }
         });
     }
     
@@ -86,7 +117,7 @@ export class NormalMapController extends GameController  {
 
         if(allDirtyStates.length <= 0)
             return;
-        this.io.emit('state_update', allDirtyStates);
+        this.io.emit('server:state_update', allDirtyStates);
     }
 
 }
