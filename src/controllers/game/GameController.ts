@@ -45,7 +45,8 @@ export class GameController implements IGameController {
                 speed: 1,
             },
             dirtyState:{},
-            lastSyncState:{}
+            lastSyncState:{},
+            sequenceNumber: 0
         }
         this.setupEventListeners(player.socket);
         this.players.push(player);

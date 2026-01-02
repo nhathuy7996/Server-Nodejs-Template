@@ -69,20 +69,18 @@ export class NormalMapController extends GameController  {
             const newZ = player.currenState.position.z + player.currenState.velocity.z * deltaTime * player.currenState.speed;
             const newPosition = { x: newX, y: player.currenState.position.y, z: newZ };
 
-            player.currenState.position = newPosition;
+            const collisionResult = CollisionDetector.checkCollision(
+                newPosition,
+                this.PlayerRadius,
+                this.PlayerHeight,
+                this.MapData ? this.MapData.obstacles : []
+            );
 
-            // const collisionResult = CollisionDetector.checkCollision(
-            //     newPosition,
-            //     this.PlayerRadius,
-            //     this.PlayerHeight,
-            //     this.MapData ? this.MapData.obstacles : []
-            // );
-
-            // if (!collisionResult.hasCollision) {
-            //     player.currenState.position.x = newX;
-            //     //player.position.y = newY;
-            //     player.currenState.position.z = newZ;
-            // }
+            if (!collisionResult.hasCollision) {
+                player.currenState.position.x = newX;
+                //player.position.y = newY;
+                player.currenState.position.z = newZ;
+            }
         });
     }
     
@@ -101,9 +99,11 @@ export class NormalMapController extends GameController  {
         let allDirtyStates: any[] = [];
         this.players.forEach(player => {
             if( Object.keys(player.dirtyState).length > 0){
+                player.sequenceNumber! += 1;
                 allDirtyStates.push({
                     id: player.id,
-                    dirtyState: player.dirtyState
+                    dirtyState: player.dirtyState,
+                    sequenceNumber: player.sequenceNumber
                 });
 
                 Object.keys(player.dirtyState).forEach((keyStr) => {

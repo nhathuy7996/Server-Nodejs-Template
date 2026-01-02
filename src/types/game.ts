@@ -22,7 +22,7 @@ export interface Player {
     currenState: TrackaleDataPlayer;
     dirtyState: Partial<TrackaleDataPlayer>;
     lastSyncState: Partial<TrackaleDataPlayer>;
-   
+    sequenceNumber?: number;
     lastSyncTime?: number;
 }
 
